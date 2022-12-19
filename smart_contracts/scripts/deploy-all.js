@@ -2,10 +2,7 @@ const hre = require("hardhat");
 const fs = require("fs");
 const fse = require("fs-extra");
 const { verify } = require("../utils/verify");
-const {
-  getAmountInWei,
-  developmentChains,
-} = require("../utils/helper-scripts");
+const { getAmountInWei, developmentChains } = require("../utils/helpers");
 
 async function main() {
   const deployNetwork = hre.network.name;
