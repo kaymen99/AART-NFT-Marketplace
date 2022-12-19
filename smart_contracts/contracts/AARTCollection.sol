@@ -40,20 +40,18 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
     error AART__ContractIsPaused();
     error AART__InsufficientAmount();
 
-    //--------------------------------------------------------------------
-    // CONSTRUCTOR
-
     constructor(uint256 _mintingFee)
         ERC721("Artifciel Art Collectible", "AART")
     {
         mintFee = _mintingFee;
 
-        // default royality == 0.5%
-        _setDefaultRoyalty(msg.sender, 50);
+        // default royalty == 0%
+        _setDefaultRoyalty(msg.sender, 0);
     }
 
-    //--------------------------------------------------------------------
-    // MAIN FUNCTIONS
+    // ************************ //
+    //      Main Functions      //
+    // ************************ //
 
     function mintNFT(address recipient, string memory uri)
         external
@@ -106,8 +104,16 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         _resetTokenRoyalty(tokenId);
     }
 
-    //--------------------------------------------------------------------
-    // VIEW FUNCTIONS
+    function _setTokenURI(uint256 tokenId, string memory _tokenURI)
+        internal
+        override
+    {
+        _tokenURIs[tokenId] = _tokenURI;
+    }
+
+    // ***************** //
+    //      Getters      //
+    // ***************** //
 
     function tokenURI(uint256 tokenId)
         public
@@ -116,9 +122,7 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         override
         returns (string memory)
     {
-        _requireMinted(tokenId);
-        string memory _tokenURI = _tokenURIs[tokenId];
-        return _tokenURI;
+        return _tokenURIs[tokenId];
     }
 
     function getAllNfts() public view returns (ArtRender[] memory) {
@@ -163,8 +167,9 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         return mintFee;
     }
 
-    //--------------------------------------------------------------------
-    // OWNER FUNCTIONS
+    // ******************* //
+    //      Owner only     //
+    // ******************* //
 
     function pause(uint256 _state) external payable onlyOwner {
         if (_state == 1 || _state == 2) paused = _state;
