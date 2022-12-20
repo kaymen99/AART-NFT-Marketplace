@@ -13,6 +13,11 @@ contract AARTMarket is IERC721Receiver {
         Canceled
     }
 
+    enum OfferStatus {
+        Active,
+        Ended
+    }
+
     enum AuctionStatus {
         Open,
         Closed,
@@ -22,7 +27,6 @@ contract AARTMarket is IERC721Receiver {
     }
 
     struct Listing {
-        uint256 id;
         uint256 tokenId;
         address seller;
         address paymentToken; // set to address(0) for MATIC
@@ -30,8 +34,15 @@ contract AARTMarket is IERC721Receiver {
         ListingStatus status;
     }
 
+    struct Offer {
+        address offerer;
+        address paymentToken; // set to address(0) for MATIC
+        uint256 price;
+        uint256 expireTime;
+        OfferStatus status;
+    }
+
     struct Auction {
-        uint256 id;
         uint256 tokenId;
         address seller;
         address paymentToken; // set to address(0) for MATIC
@@ -47,6 +58,10 @@ contract AARTMarket is IERC721Receiver {
     Listing[] private _listings;
     Auction[] private _auctions;
 
+    // tokenId => offer
+    mapping(uint256 => Offer[]) private _offers;
+
+    // auctionId => user => bid amount
     mapping(uint256 => mapping(address => uint256))
         private auctionBidderAmounts;
 
@@ -58,6 +73,9 @@ contract AARTMarket is IERC721Receiver {
     event ItemListed(uint256 listingId, address seller, uint256 tokenId);
     event ItemSold(uint256 listingId, address buyer);
     event ItemCanceled(uint256 listingId);
+    event NewOffer(uint256 offerId, uint256 tokenId, address offerer);
+    event OfferAccepted(uint256 offerId, uint256 tokenId, address owner);
+    event OfferCanceled(uint256 offerId, uint256 tokenId);
     event AuctionStarted(
         uint256 auctionId,
         address seller,
@@ -74,10 +92,15 @@ contract AARTMarket is IERC721Receiver {
     // ERRORS
 
     error AARTMarket_InvalidToken(uint256 tokenId);
+    error AARTMarket_OnlyTokenOwner(uint256 tokenId);
     error AARTMarket_ItemNotApproved(uint256 tokenId);
     error AARTMarket_AddressZero();
     error AARTMarket_OnlySeller(uint256 id);
     error AARTMarket_ListingNotActive(uint256 listingId);
+    error AARTMarket_OfferAmountNotApproved();
+    error AARTMarket_InvalidExpirationTime();
+    error AARTMarket_OfferNotActive(uint256 offerId, uint256 tokenId);
+    error AARTMarket_OnlyOfferer(uint256 offerId, uint256 tokenId);
     error AARTMarket_InvalidAuctionPeriod(uint256 endTime, uint256 startTime);
     error AARTMarket_InvalidStartTime(uint256 startTime);
     error AARTMarket_InvalidStartPrice();
@@ -90,7 +113,7 @@ contract AARTMarket is IERC721Receiver {
     error AARTMarket_HasNoBid(uint256 auctionId);
     error AARTMarket_AuctionPeriodNotEnded(uint256 auctionId, uint256 endTime);
     error AARTMarket_CancelImpossible(uint256 auctionId);
-    error TransferFailed();
+    error AARTMarket_TransferFailed();
 
     constructor(address _nftAddress) {
         if (_nftAddress == address(0)) revert AARTMarket_AddressZero();
@@ -98,7 +121,7 @@ contract AARTMarket is IERC721Receiver {
     }
 
     // ************************** //
-    //      DIRECT SALE LOGIC     //
+    //      Direct Sale Logic     //
     // ************************** //
 
     function listItem(
@@ -117,7 +140,6 @@ contract AARTMarket is IERC721Receiver {
         listingId = _listings.length;
 
         Listing memory listingItem;
-        listingItem.id = listingId;
         listingItem.tokenId = _tokenId;
         listingItem.seller = msg.sender;
         listingItem.paymentToken = _paymentToken;
@@ -134,6 +156,9 @@ contract AARTMarket is IERC721Receiver {
 
         if (item.status != ListingStatus.Active)
             revert AARTMarket_ListingNotActive(_listingId);
+
+        if (item.paymentToken == address(0) && msg.value != item.buyPrice)
+            revert AARTMarket_InsufficientAmount();
 
         // handle payment
         _handleSalePayment(
@@ -165,7 +190,93 @@ contract AARTMarket is IERC721Receiver {
     }
 
     // ********************** //
-    //      AUCTION LOGIC     //
+    //      Offers Logic      //
+    // ********************** //
+
+    function makeOffer(
+        uint256 tokenId,
+        address paymentToken,
+        uint256 offerPrice,
+        uint256 expirationTime
+    ) external payable returns (uint256 offerId) {
+        // revert if token does not exist in the AART collection
+        _isAARTToken(tokenId);
+
+        if (expirationTime <= block.timestamp)
+            revert AARTMarket_InvalidExpirationTime();
+
+        if (paymentToken == address(0)) {
+            // can not approve MATIC so offerer is obliged to escrow offerPrice to this contract
+            // the fund can be withdrawn by canceling the offer
+            if (msg.value != offerPrice) revert AARTMarket_InsufficientAmount();
+        } else {
+            // check that the offerer has approved offerPrice amount of paymetToken to this contract
+            if (
+                IERC20(paymentToken).allowance(msg.sender, address(this)) <
+                offerPrice
+            ) revert AARTMarket_OfferAmountNotApproved();
+        }
+
+        offerId = _offers[tokenId].length;
+
+        Offer memory offer;
+        offer.offerer = msg.sender;
+        offer.paymentToken = paymentToken;
+        offer.price = offerPrice;
+        offer.expireTime = uint128(expirationTime);
+        offer.status = OfferStatus.Active;
+
+        _offers[tokenId].push(offer);
+
+        emit NewOffer(offerId, tokenId, msg.sender);
+    }
+
+    function acceptOffer(uint256 tokenId, uint256 offerId) external {
+        Offer memory offer = _offers[tokenId][offerId];
+        // check that the user is the owner of the token
+        if (msg.sender != nftContract.ownerOf(tokenId))
+            revert AARTMarket_OnlyTokenOwner(tokenId);
+
+        if (_offerStatus(tokenId, offerId) != OfferStatus.Active)
+            revert AARTMarket_OfferNotActive(offerId, tokenId);
+
+        // handle payment like a normal sale
+        _handleSalePayment(
+            tokenId,
+            msg.sender,
+            offer.offerer,
+            offer.paymentToken,
+            offer.price
+        );
+
+        _offers[tokenId][offerId].status = OfferStatus.Ended;
+
+        // transfer nft to this contract
+        nftContract.safeTransferFrom(msg.sender, offer.offerer, tokenId);
+
+        emit OfferAccepted(offerId, tokenId, msg.sender);
+    }
+
+    function cancelOffer(uint256 tokenId, uint256 offerId) external {
+        Offer memory offer = _offers[tokenId][offerId];
+
+        if (msg.sender != offer.offerer)
+            revert AARTMarket_OnlyOfferer(offerId, tokenId);
+        if (_offerStatus(tokenId, offerId) != OfferStatus.Active)
+            revert AARTMarket_OfferNotActive(offerId, tokenId);
+
+        _offers[tokenId][offerId].status = OfferStatus.Ended;
+
+        if (offer.paymentToken == address(0)) {
+            // return MATIC amount escowed when creating offer to offerer
+            _sendMatic(offer.offerer, offer.price);
+        }
+
+        emit OfferCanceled(offerId, tokenId);
+    }
+
+    // ********************** //
+    //      Auction Logic     //
     // ********************** //
 
     function startAuction(
@@ -191,7 +302,6 @@ contract AARTMarket is IERC721Receiver {
         auctionId = _auctions.length;
 
         Auction memory _auction;
-        _auction.id = auctionId;
         _auction.tokenId = _tokenId;
         _auction.seller = msg.sender;
         _auction.paymentToken = _paymentToken;
@@ -287,10 +397,11 @@ contract AARTMarket is IERC721Receiver {
         auctionBidderAmounts[_auctionId][msg.sender] = 0;
 
         address _paymentToken = _auctions[_auctionId].paymentToken;
+        // return bid amount to the bidder
         if (_paymentToken != address(0)) {
             IERC20(_paymentToken).transfer(msg.sender, bidAmount);
         } else {
-            sendMatic(msg.sender, bidAmount);
+            _sendMatic(msg.sender, bidAmount);
         }
     }
 
@@ -359,9 +470,14 @@ contract AARTMarket is IERC721Receiver {
     //      Internal utils      //
     // ************************ //
 
-    function sendMatic(address account, uint256 amount) internal {
+    // this function reverts if token does not exists
+    function _isAARTToken(uint256 tokenId) internal view returns (bool) {
+        return nftContract.ownerOf(tokenId) != address(0);
+    }
+
+    function _sendMatic(address account, uint256 amount) internal {
         (bool success, ) = payable(account).call{value: amount}("");
-        if (!success) revert TransferFailed();
+        if (!success) revert AARTMarket_TransferFailed();
     }
 
     function _handleSalePayment(
@@ -397,16 +513,15 @@ contract AARTMarket is IERC721Receiver {
             }
         } else {
             // Case 2 : Matic payment
-            if (msg.value != salePrice) revert AARTMarket_InsufficientAmount();
             if (seller != royaltyReceiver && royaltyAmount != 0) {
                 // pay NFT creator royalty in Matic
-                sendMatic(royaltyReceiver, royaltyAmount);
+                _sendMatic(royaltyReceiver, royaltyAmount);
                 // pay current item seller in Matic
-                sendMatic(seller, msg.value - royaltyAmount);
+                _sendMatic(seller, salePrice - royaltyAmount);
                 emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
             } else {
                 // seller is same as NFT creator so send directly
-                sendMatic(seller, msg.value);
+                _sendMatic(seller, salePrice);
             }
         }
     }
@@ -440,14 +555,27 @@ contract AARTMarket is IERC721Receiver {
             // Case 2 : Matic payment
             if (seller != royaltyReceiver && royaltyAmount != 0) {
                 // pay NFT creator royalty in Matic
-                sendMatic(royaltyReceiver, royaltyAmount);
+                _sendMatic(royaltyReceiver, royaltyAmount);
                 // pay current item seller in Matic
-                sendMatic(seller, salePrice - royaltyAmount);
+                _sendMatic(seller, salePrice - royaltyAmount);
                 emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
             } else {
                 // seller is same as NFT creator so send directly
-                sendMatic(seller, salePrice);
+                _sendMatic(seller, salePrice);
             }
+        }
+    }
+
+    function _offerStatus(uint256 tokenId, uint256 offerId)
+        internal
+        view
+        returns (OfferStatus)
+    {
+        Offer memory offer = _offers[tokenId][offerId];
+        if (block.timestamp > offer.expireTime) {
+            return OfferStatus.Ended;
+        } else {
+            return offer.status;
         }
     }
 
@@ -485,6 +613,14 @@ contract AARTMarket is IERC721Receiver {
 
     function getAuctions() external view returns (Auction[] memory) {
         return _auctions;
+    }
+
+    function getTokenBuyOffers(uint256 tokenId)
+        external
+        view
+        returns (Offer[] memory)
+    {
+        return _offers[tokenId];
     }
 
     function getUserBidAmount(uint256 auctionId, address account)
