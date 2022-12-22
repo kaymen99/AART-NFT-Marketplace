@@ -561,7 +561,7 @@ contract AARTMarket is Ownable, IERC721Receiver {
                     finalAmount = salePrice - feeAmount;
                 }
                 // seller is same as NFT creator so transfer directly
-                IERC20(paymentToken).transferFrom(buyer, seller, salePrice);
+                IERC20(paymentToken).transferFrom(buyer, seller, finalAmount);
             }
         } else {
             // Case 2 : Matic payment
@@ -583,7 +583,7 @@ contract AARTMarket is Ownable, IERC721Receiver {
                     finalAmount = salePrice - feeAmount;
                 }
                 // seller is same as NFT creator so send directly
-                _sendMatic(seller, salePrice);
+                _sendMatic(seller, finalAmount);
             }
         }
     }
@@ -619,7 +619,7 @@ contract AARTMarket is Ownable, IERC721Receiver {
                     finalAmount = salePrice - feeAmount;
                 }
                 // seller is same as NFT creator so transfer directly
-                IERC20(paymentToken).transfer(seller, salePrice);
+                IERC20(paymentToken).transfer(seller, finalAmount);
             }
         } else {
             // Case 2 : Matic payment
