@@ -31,7 +31,7 @@ const {
           expect(await nftContract.owner()).to.equal(ownerAddress);
         });
         it("NFT contract should have correct initial parameters", async () => {
-          expect(await nftContract.getMintingFee()).to.equal(mintFee);
+          expect(await nftContract.mintFee()).to.equal(mintFee);
           expect(await nftContract.paused()).to.equal(1);
         });
       });
@@ -201,7 +201,7 @@ const {
         });
 
         it("owner should be able to withdraw contract balance", async () => {
-          expect(await nftContract.getMintingFee()).to.equal(mintFee);
+          expect(await nftContract.mintFee()).to.equal(mintFee);
           // mint an NFT
           await nftContract
             .connect(user1)
@@ -222,11 +222,11 @@ const {
         });
 
         it("owner should be able to change minting fee", async () => {
-          expect(await nftContract.getMintingFee()).to.equal(mintFee);
+          expect(await nftContract.mintFee()).to.equal(mintFee);
           // update mint fee
           const newFee = getAmountInWei(20);
           await nftContract.connect(owner).setMintFee(newFee);
-          expect(await nftContract.getMintingFee()).to.equal(newFee);
+          expect(await nftContract.mintFee()).to.equal(newFee);
         });
       });
     });
