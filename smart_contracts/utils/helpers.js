@@ -63,7 +63,7 @@ async function deployNFTContract(deployer) {
 }
 
 async function mintNewNFT(nftContract, account) {
-  const mintFee = await nftContract.getMintingFee();
+  const mintFee = await nftContract.mintFee();
   const TEST_URI = "ipfs://test-nft-uri";
   await nftContract
     .connect(account)
@@ -71,7 +71,7 @@ async function mintNewNFT(nftContract, account) {
 }
 
 async function mintNewNFTWithRoyalty(nftContract, account, royaltyFee) {
-  const mintFee = await nftContract.getMintingFee();
+  const mintFee = await nftContract.mintFee();
   const TEST_URI = "ipfs://test-nft-uri";
   await nftContract
     .connect(account)
