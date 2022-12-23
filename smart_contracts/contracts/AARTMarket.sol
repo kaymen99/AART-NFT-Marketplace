@@ -6,58 +6,20 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./interfaces/IAARTCollection.sol";
+import "./interfaces/IAARTMarket.sol";
+import "./utils/AARTErrors.sol";
+import "./utils/AARTEvents.sol";
+import "./lib/PaymentLib.sol";
 
-contract AARTMarket is Ownable, IERC721Receiver {
+contract AARTMarket is
+    IAARTMarket,
+    AARTErrors,
+    AARTEvents,
+    Ownable,
+    IERC721Receiver
+{
     uint256 private constant PRECISION = 1e3;
     uint256 private constant MAX_FEE = 30; // 3% is maximum trade fee
-
-    enum ListingStatus {
-        Active,
-        Sold,
-        Canceled
-    }
-
-    enum OfferStatus {
-        Active,
-        Ended
-    }
-
-    enum AuctionStatus {
-        Open,
-        Closed,
-        Ended,
-        DirectBuy,
-        Canceled
-    }
-
-    struct Listing {
-        uint256 tokenId;
-        address seller;
-        address paymentToken; // set to address(0) for MATIC
-        uint256 buyPrice;
-        ListingStatus status;
-    }
-
-    struct Offer {
-        address offerer;
-        address paymentToken; // set to address(0) for MATIC
-        uint256 price;
-        uint256 expireTime;
-        OfferStatus status;
-    }
-
-    struct Auction {
-        uint256 tokenId;
-        address seller;
-        address paymentToken; // set to address(0) for MATIC
-        address highestBidder;
-        uint256 highestBid;
-        uint256 directBuyPrice;
-        uint256 startPrice;
-        uint128 startTime;
-        uint128 endTime;
-        AuctionStatus status;
-    }
 
     Listing[] private _listings;
     Auction[] private _auctions;
@@ -76,74 +38,12 @@ contract AARTMarket is Ownable, IERC721Receiver {
     IAARTCollection private immutable nftContract;
 
     uint256 public fee = 10; // 1%
-
-    //--------------------------------------------------------------------
-    // EVENTS
-
-    event ItemListed(uint256 listingId, address seller, uint256 tokenId);
-    event ItemSold(uint256 listingId, address buyer);
-    event ItemCanceled(uint256 listingId);
-    event NewOffer(uint256 offerId, uint256 tokenId, address offerer);
-    event OfferAccepted(uint256 offerId, uint256 tokenId, address owner);
-    event OfferCanceled(uint256 offerId, uint256 tokenId);
-    event AuctionStarted(
-        uint256 auctionId,
-        address seller,
-        uint256 tokenId,
-        uint256 startTime
-    );
-    event NewBid(uint256 auctionId, address bidder, uint256 bidAmount);
-    event AuctionDirectBuy(uint256 auctionId, address buyer);
-    event AuctionCanceled(uint256 auctionId);
-    event AuctionEnded(uint256 auctionId, address buyer);
-    event RoyaltyPaid(uint256 tokenId, address receiver, uint256 amount);
-    event NewSupportedToken(address token);
-    event NewFee(uint256 fee);
-
-    //--------------------------------------------------------------------
-    // ERRORS
-
-    error AARTMarket_InvalidToken(uint256 tokenId);
-    error AARTMarket_OnlyTokenOwner(uint256 tokenId);
-    error AARTMarket_ItemNotApproved(uint256 tokenId);
-    error AARTMarket_AddressZero();
-    error AARTMarket_OnlySeller(uint256 id);
-    error AARTMarket_ListingNotActive(uint256 listingId);
-    error AARTMarket_OfferAmountNotApproved();
-    error AARTMarket_InvalidExpirationTime();
-    error AARTMarket_OfferNotActive(uint256 offerId, uint256 tokenId);
-    error AARTMarket_OnlyOfferer(uint256 offerId, uint256 tokenId);
-    error AARTMarket_InvalidAuctionPeriod(uint256 endTime, uint256 startTime);
-    error AARTMarket_InvalidStartTime(uint256 startTime);
-    error AARTMarket_InvalidStartPrice();
-    error AARTMarket_InvalidDirectBuyPrice(uint256 directBuyPrice);
-    error AARTMarket_AuctionNotOpen(uint256 auctionId);
-    error AARTMarket_AlreadyHighestBid(uint256 auctionId);
-    error AARTMarket_InsufficientBid(uint256 auctionId);
-    error AARTMarket_InsufficientAmount();
-    error AARTMarket_IsHighestBidder(uint256 auctionId);
-    error AARTMarket_HasNoBid(uint256 auctionId);
-    error AARTMarket_AuctionPeriodNotEnded(uint256 auctionId, uint256 endTime);
-    error AARTMarket_CancelImpossible(uint256 auctionId);
-    error AARTMarket_UnsupportedToken(address token);
-    error AARTMarket_AlreadySupported(address token);
-    error AARTMarket_InvalidFee(uint256 fee);
-    error AARTMarket_TransferFailed();
-
-    //--------------------------------------------------------------------
-    // Modifiers
-
-    modifier allowedToken(address token) {
-        if (token != address(0)) {
-            if (!_erc20Tokensmapping[token])
-                revert AARTMarket_UnsupportedToken(token);
-        }
-        _;
-    }
+    address private feeRecipient;
 
     constructor(address _nftAddress) {
         if (_nftAddress == address(0)) revert AARTMarket_AddressZero();
         nftContract = IAARTCollection(_nftAddress);
+        feeRecipient = msg.sender;
     }
 
     // ************************** //
@@ -154,11 +54,12 @@ contract AARTMarket is Ownable, IERC721Receiver {
         uint256 _tokenId,
         address _paymentToken,
         uint256 _buyPrice
-    ) external allowedToken(_paymentToken) returns (uint256 listingId) {
-        // check that the user is the owner of the token
-        // also checks that token is from the AART collection
-        if (nftContract.ownerOf(_tokenId) != msg.sender)
-            revert AARTMarket_InvalidToken(_tokenId);
+    ) external returns (uint256 listingId) {
+        // check that token is allowed
+        _allowedToken(_paymentToken);
+
+        _isAARTTokenOwner(_tokenId, msg.sender);
+
         // check that the user approved this contract to transfer token
         if (nftContract.getApproved(_tokenId) != address(this))
             revert AARTMarket_ItemNotApproved(_tokenId);
@@ -187,7 +88,7 @@ contract AARTMarket is Ownable, IERC721Receiver {
             revert AARTMarket_InsufficientAmount();
 
         // handle payment
-        _handleSalePayment(
+        _handlePayment(
             item.tokenId,
             item.seller,
             msg.sender,
@@ -220,85 +121,87 @@ contract AARTMarket is Ownable, IERC721Receiver {
     // ********************** //
 
     function makeOffer(
-        uint256 tokenId,
-        address paymentToken,
-        uint256 offerPrice,
-        uint256 expirationTime
-    ) external payable allowedToken(paymentToken) returns (uint256 offerId) {
-        // revert if token does not exist in the AART collection
-        _isAARTToken(tokenId);
+        uint256 _tokenId,
+        address _paymentToken,
+        uint256 _offerPrice,
+        uint256 _expirationTime
+    ) external payable returns (uint256 offerId) {
+        // check that token is allowed
+        _allowedToken(_paymentToken);
 
-        if (expirationTime <= block.timestamp)
+        if (nftContract.ownerOf(_tokenId) == address(0)) revert();
+
+        if (_expirationTime <= block.timestamp)
             revert AARTMarket_InvalidExpirationTime();
 
-        if (paymentToken == address(0)) {
+        if (_paymentToken == address(0)) {
             // can not approve MATIC so offerer is obliged to escrow offerPrice to this contract
             // the fund can be withdrawn by canceling the offer
-            if (msg.value != offerPrice) revert AARTMarket_InsufficientAmount();
+            if (msg.value != _offerPrice)
+                revert AARTMarket_InsufficientAmount();
         } else {
             // check that the offerer has approved offerPrice amount of paymetToken to this contract
             if (
-                IERC20(paymentToken).allowance(msg.sender, address(this)) <
-                offerPrice
+                IERC20(_paymentToken).allowance(msg.sender, address(this)) <
+                _offerPrice
             ) revert AARTMarket_OfferAmountNotApproved();
         }
 
-        offerId = _offers[tokenId].length;
+        offerId = _offers[_tokenId].length;
 
         Offer memory offer;
         offer.offerer = msg.sender;
-        offer.paymentToken = paymentToken;
-        offer.price = offerPrice;
-        offer.expireTime = uint128(expirationTime);
+        offer.paymentToken = _paymentToken;
+        offer.price = _offerPrice;
+        offer.expireTime = uint128(_expirationTime);
         offer.status = OfferStatus.Active;
 
-        _offers[tokenId].push(offer);
+        _offers[_tokenId].push(offer);
 
-        emit NewOffer(offerId, tokenId, msg.sender);
+        emit NewOffer(offerId, _tokenId, msg.sender);
     }
 
-    function acceptOffer(uint256 tokenId, uint256 offerId) external {
-        Offer memory offer = _offers[tokenId][offerId];
-        // check that the user is the owner of the token
-        if (msg.sender != nftContract.ownerOf(tokenId))
-            revert AARTMarket_OnlyTokenOwner(tokenId);
+    function acceptOffer(uint256 _tokenId, uint256 _offerId) external {
+        Offer memory offer = _offers[_tokenId][_offerId];
 
-        if (_offerStatus(tokenId, offerId) != OfferStatus.Active)
-            revert AARTMarket_OfferNotActive(offerId, tokenId);
+        _isAARTTokenOwner(_tokenId, msg.sender);
+
+        if (_offerStatus(_tokenId, _offerId) != OfferStatus.Active)
+            revert AARTMarket_OfferNotActive(_offerId, _tokenId);
 
         // handle payment like a normal sale
-        _handleSalePayment(
-            tokenId,
+        _handlePayment(
+            _tokenId,
             msg.sender,
             offer.offerer,
             offer.paymentToken,
             offer.price
         );
 
-        _offers[tokenId][offerId].status = OfferStatus.Ended;
+        _offers[_tokenId][_offerId].status = OfferStatus.Ended;
 
         // transfer nft to this contract
-        nftContract.safeTransferFrom(msg.sender, offer.offerer, tokenId);
+        nftContract.safeTransferFrom(msg.sender, offer.offerer, _tokenId);
 
-        emit OfferAccepted(offerId, tokenId, msg.sender);
+        emit OfferAccepted(_offerId, _tokenId, msg.sender);
     }
 
-    function cancelOffer(uint256 tokenId, uint256 offerId) external {
-        Offer memory offer = _offers[tokenId][offerId];
+    function cancelOffer(uint256 _tokenId, uint256 _offerId) external {
+        Offer memory offer = _offers[_tokenId][_offerId];
 
         if (msg.sender != offer.offerer)
-            revert AARTMarket_OnlyOfferer(offerId, tokenId);
-        if (_offerStatus(tokenId, offerId) != OfferStatus.Active)
-            revert AARTMarket_OfferNotActive(offerId, tokenId);
+            revert AARTMarket_OnlyOfferer(_offerId, _tokenId);
+        if (_offerStatus(_tokenId, _offerId) != OfferStatus.Active)
+            revert AARTMarket_OfferNotActive(_offerId, _tokenId);
 
-        _offers[tokenId][offerId].status = OfferStatus.Ended;
+        _offers[_tokenId][_offerId].status = OfferStatus.Ended;
 
         if (offer.paymentToken == address(0)) {
             // return MATIC amount escowed when creating offer to offerer
-            _sendMatic(offer.offerer, offer.price);
+            PaymentLib.transferNativeToken(offer.offerer, offer.price);
         }
 
-        emit OfferCanceled(offerId, tokenId);
+        emit OfferCanceled(_offerId, _tokenId);
     }
 
     // ********************** //
@@ -312,11 +215,12 @@ contract AARTMarket is Ownable, IERC721Receiver {
         uint256 _startPrice,
         uint128 _startTime,
         uint128 _endTime
-    ) external allowedToken(_paymentToken) returns (uint256 auctionId) {
-        // check that the user is the owner of the token
-        // also checks that token is from the AART collection
-        if (nftContract.ownerOf(_tokenId) != msg.sender)
-            revert AARTMarket_InvalidToken(_tokenId);
+    ) external returns (uint256 auctionId) {
+        // check that token is allowed
+        _allowedToken(_paymentToken);
+
+        _isAARTTokenOwner(_tokenId, msg.sender);
+
         if (_endTime <= _startTime)
             revert AARTMarket_InvalidAuctionPeriod(_endTime, _startTime);
         if (_startTime < block.timestamp)
@@ -395,7 +299,7 @@ contract AARTMarket is Ownable, IERC721Receiver {
         ) revert AARTMarket_InsufficientAmount();
 
         // handle payment
-        _handleSalePayment(
+        _handlePayment(
             _auction.tokenId,
             _auction.seller,
             msg.sender,
@@ -427,13 +331,13 @@ contract AARTMarket is Ownable, IERC721Receiver {
 
         auctionBidderAmounts[_auctionId][msg.sender] = 0;
 
-        address _paymentToken = _auctions[_auctionId].paymentToken;
         // return bid amount to the bidder
-        if (_paymentToken != address(0)) {
-            IERC20(_paymentToken).transfer(msg.sender, bidAmount);
-        } else {
-            _sendMatic(msg.sender, bidAmount);
-        }
+        PaymentLib.transferToken(
+            _auctions[_auctionId].paymentToken,
+            address(this),
+            msg.sender,
+            bidAmount
+        );
     }
 
     function endAuction(uint256 _auctionId) external {
@@ -449,9 +353,10 @@ contract AARTMarket is Ownable, IERC721Receiver {
             buyer = _auction.highestBidder;
 
             // handle payment
-            _handleAuctionPayment(
+            _handlePayment(
                 _auction.tokenId,
                 _auction.seller,
+                address(this),
                 _auction.paymentToken,
                 _auction.highestBid
             );
@@ -501,151 +406,58 @@ contract AARTMarket is Ownable, IERC721Receiver {
     //      Internal utils      //
     // ************************ //
 
-    // this function reverts if token does not exists
-    function _isAARTToken(uint256 tokenId) internal view returns (bool) {
-        return nftContract.ownerOf(tokenId) != address(0);
+    function _isAARTTokenOwner(uint256 _tokenId, address user) internal view {
+        // check that the user is the owner of the token
+        // also reverts if the token does not exists in the AART collection
+        if (nftContract.ownerOf(_tokenId) != user)
+            revert AARTMarket_OnlyTokenOwner(_tokenId);
     }
 
-    function _sendMatic(address account, uint256 amount) internal {
-        (bool success, ) = payable(account).call{value: amount}("");
-        if (!success) revert AARTMarket_TransferFailed();
+    function _allowedToken(address token) internal view {
+        if (token != address(0)) {
+            if (!_erc20Tokensmapping[token])
+                revert AARTMarket_UnsupportedToken(token);
+        }
     }
 
-    function _handleSalePayment(
+    function _handlePayment(
         uint256 tokenId,
         address seller,
         address buyer,
         address paymentToken,
-        uint256 salePrice
+        uint256 price
     ) internal {
         (address royaltyReceiver, uint256 royaltyAmount) = nftContract
-            .royaltyInfo(tokenId, salePrice);
+            .royaltyInfo(tokenId, price);
 
-        uint256 feeAmount = (salePrice * fee) / PRECISION;
+        uint256 feeAmount = (price * fee) / PRECISION;
 
-        if (paymentToken != address(0)) {
-            // Case 1 : ERC20 payment
-            if (seller != royaltyReceiver && royaltyAmount != 0) {
-                // pay NFT creator royalty in ERC20 token
-                IERC20(paymentToken).transferFrom(
-                    buyer,
-                    royaltyReceiver,
-                    royaltyAmount
-                );
+        // pay platform fee
+        PaymentLib.transferToken(paymentToken, buyer, feeRecipient, feeAmount);
 
-                // pay platform fee
-                IERC20(paymentToken).transferFrom(
-                    buyer,
-                    address(this),
-                    feeAmount
-                );
-
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - royaltyAmount - feeAmount;
-                }
-                // pay current item seller in ERC20 token
-                IERC20(paymentToken).transferFrom(buyer, seller, finalAmount);
-
-                emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
-            } else {
-                // pay platform fee
-                IERC20(paymentToken).transferFrom(
-                    buyer,
-                    address(this),
-                    feeAmount
-                );
-
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - feeAmount;
-                }
-                // seller is same as NFT creator so transfer directly
-                IERC20(paymentToken).transferFrom(buyer, seller, finalAmount);
-            }
-        } else {
-            // Case 2 : Matic payment
-            if (seller != royaltyReceiver && royaltyAmount != 0) {
-                // pay NFT creator royalty in Matic
-                _sendMatic(royaltyReceiver, royaltyAmount);
-
-                // pay current item seller in Matic
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - royaltyAmount - feeAmount;
-                }
-                _sendMatic(seller, finalAmount);
-
-                emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
-            } else {
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - feeAmount;
-                }
-                // seller is same as NFT creator so send directly
-                _sendMatic(seller, finalAmount);
-            }
+        uint256 finalAmount;
+        unchecked {
+            finalAmount = price - feeAmount;
         }
-    }
 
-    function _handleAuctionPayment(
-        uint256 tokenId,
-        address seller,
-        address paymentToken,
-        uint256 salePrice
-    ) internal {
-        (address royaltyReceiver, uint256 royaltyAmount) = nftContract
-            .royaltyInfo(tokenId, salePrice);
+        if (seller != royaltyReceiver && royaltyAmount != 0) {
+            // pay NFT creator royalty in Matic
+            PaymentLib.transferToken(
+                paymentToken,
+                buyer,
+                royaltyReceiver,
+                royaltyAmount
+            );
 
-        uint256 feeAmount = (salePrice * fee) / PRECISION;
-
-        if (paymentToken != address(0)) {
-            // Case 1 : ERC20 payment
-            if (seller != royaltyReceiver && royaltyAmount != 0) {
-                // pay NFT creator royalty in ERC20 token
-                IERC20(paymentToken).transfer(royaltyReceiver, royaltyAmount);
-
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - royaltyAmount - feeAmount;
-                }
-                // pay current item seller in ERC20 token
-                IERC20(paymentToken).transfer(seller, finalAmount);
-
-                emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
-            } else {
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - feeAmount;
-                }
-                // seller is same as NFT creator so transfer directly
-                IERC20(paymentToken).transfer(seller, finalAmount);
+            unchecked {
+                finalAmount -= royaltyAmount;
             }
-        } else {
-            // Case 2 : Matic payment
-            if (seller != royaltyReceiver && royaltyAmount != 0) {
-                // pay NFT creator royalty in Matic
-                _sendMatic(royaltyReceiver, royaltyAmount);
 
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - royaltyAmount - feeAmount;
-                }
-
-                // pay current item seller in Matic
-                _sendMatic(seller, finalAmount);
-
-                emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
-            } else {
-                uint256 finalAmount;
-                unchecked {
-                    finalAmount = salePrice - feeAmount;
-                }
-
-                // seller is same as NFT creator so send directly
-                _sendMatic(seller, finalAmount);
-            }
+            emit RoyaltyPaid(tokenId, royaltyReceiver, royaltyAmount);
         }
+
+        // pay seller remaining amount
+        PaymentLib.transferToken(paymentToken, buyer, seller, finalAmount);
     }
 
     function _offerStatus(uint256 tokenId, uint256 offerId)
@@ -685,20 +497,12 @@ contract AARTMarket is Ownable, IERC721Receiver {
     //      Getters      //
     // ***************** //
 
-    function getNFTCollection() external view returns (address) {
-        return address(nftContract);
-    }
-
     function getListings() external view returns (Listing[] memory) {
         return _listings;
     }
 
     function getAuctions() external view returns (Auction[] memory) {
         return _auctions;
-    }
-
-    function getSupportedTokens() external view returns (address[] memory) {
-        return supportedERC20tokens;
     }
 
     function getTokenBuyOffers(uint256 tokenId)
@@ -737,8 +541,13 @@ contract AARTMarket is Ownable, IERC721Receiver {
         emit NewFee(_fee);
     }
 
+    function setFeeRecipient(address _newRecipient) external onlyOwner {
+        feeRecipient = _newRecipient;
+    }
+
     function addSupportedToken(address _token) external onlyOwner {
-        if (_erc20Tokensmapping[_token]) revert AARTMarket_AlreadySupported(_token);
+        if (_erc20Tokensmapping[_token])
+            revert AARTMarket_AlreadySupported(_token);
         _erc20Tokensmapping[_token] = true;
         supportedERC20tokens.push(_token);
 
