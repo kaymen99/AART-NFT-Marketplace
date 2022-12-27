@@ -5,7 +5,7 @@
   "author": "kaymen99",
   "license": "MIT",
   "scripts": {
-    "deploy": "npx hardhat run scripts/deploy-vault.js",
+    "deploy": "npx hardhat run scripts/deploy-all.js",
     "test": "npx hardhat test",
     "compile": "npx hardhat compile"
   },
