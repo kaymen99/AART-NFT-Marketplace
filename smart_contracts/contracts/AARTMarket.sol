@@ -320,7 +320,7 @@ contract AARTMarket is
     }
 
     function withdrawBid(uint256 _auctionId) external {
-        if (_auctionStatus(_auctionId) == AuctionStatus.Open) {
+        if (_auctions[_auctionId].status == AuctionStatus.Open) {
             // if auction is open don't allow highest bidder withdrawal
             if (msg.sender == _auctions[_auctionId].highestBidder)
                 revert AARTMarket_IsHighestBidder(_auctionId);
