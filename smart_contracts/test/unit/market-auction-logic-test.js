@@ -327,7 +327,7 @@ const AuctionStatus = {
             AuctionParam.directBuyPrice = getAmountInWei(100);
             AuctionParam.startPrice = getAmountInWei(10);
             AuctionParam.startTime = Math.floor(
-              new Date("2022.12.25").getTime() / 1000
+              new Date("2023.12.20").getTime() / 1000
             );
             AuctionParam.endTime = Math.floor(
               new Date("2023.12.28").getTime() / 1000
@@ -508,7 +508,7 @@ const AuctionStatus = {
             AuctionParam.directBuyPrice = getAmountInWei(100);
             AuctionParam.startPrice = getAmountInWei(10);
             AuctionParam.startTime = Math.floor(
-              new Date("2022.12.25").getTime() / 1000
+              new Date("2023.12.20").getTime() / 1000
             );
             AuctionParam.endTime = Math.floor(
               new Date("2023.12.28").getTime() / 1000
@@ -1670,7 +1670,7 @@ const AuctionStatus = {
                 AuctionParam.directBuyPrice = getAmountInWei(100);
                 AuctionParam.startPrice = getAmountInWei(10);
                 AuctionParam.startTime = Math.floor(
-                  new Date("2023.12.25").getTime() / 1000
+                  new Date("2023.12.20").getTime() / 1000
                 );
                 AuctionParam.endTime = Math.floor(
                   new Date("2023.12.28").getTime() / 1000
@@ -1833,7 +1833,7 @@ const AuctionStatus = {
                 AuctionParam.directBuyPrice = getAmountInWei(100);
                 AuctionParam.startPrice = getAmountInWei(10);
                 AuctionParam.startTime = Math.floor(
-                  new Date("2023.12.25").getTime() / 1000
+                  new Date("2023.12.20").getTime() / 1000
                 );
                 AuctionParam.endTime = Math.floor(
                   new Date("2023.12.28").getTime() / 1000
@@ -1998,7 +1998,7 @@ const AuctionStatus = {
             AuctionParam.directBuyPrice = getAmountInWei(100);
             AuctionParam.startPrice = getAmountInWei(10);
             AuctionParam.startTime = Math.floor(
-              new Date("2022.12.25").getTime() / 1000
+              new Date("2023.12.20").getTime() / 1000
             );
             AuctionParam.endTime = Math.floor(
               new Date("2023.12.28").getTime() / 1000
@@ -2022,7 +2022,7 @@ const AuctionStatus = {
                 AuctionParam.endTime
               );
           });
-          it("should revert if user has no bid user to bid on open auction", async () => {
+          it("should revert if user has no bid", async () => {
             await moveTimeTo(AuctionParam.startTime);
 
             await expect(
@@ -2141,7 +2141,7 @@ const AuctionStatus = {
             AuctionParam.directBuyPrice = getAmountInWei(100);
             AuctionParam.startPrice = getAmountInWei(10);
             AuctionParam.startTime = Math.floor(
-              new Date("2022.12.25").getTime() / 1000
+              new Date("2023.12.20").getTime() / 1000
             );
             AuctionParam.endTime = Math.floor(
               new Date("2023.12.28").getTime() / 1000
@@ -2165,7 +2165,7 @@ const AuctionStatus = {
                 AuctionParam.endTime
               );
           });
-          it("should revert if user has no bid user to bid on open auction", async () => {
+          it("should revert if user has no bid", async () => {
             await moveTimeTo(AuctionParam.startTime);
             await expect(
               marketContract.connect(user3).withdrawBid(auctionId)
@@ -2271,7 +2271,7 @@ const AuctionStatus = {
           AuctionParam.directBuyPrice = getAmountInWei(100);
           AuctionParam.startPrice = getAmountInWei(10);
           AuctionParam.startTime = Math.floor(
-            new Date("2022.12.25").getTime() / 1000
+            new Date("2023.12.20").getTime() / 1000
           );
           AuctionParam.endTime = Math.floor(
             new Date("2023.12.28").getTime() / 1000
