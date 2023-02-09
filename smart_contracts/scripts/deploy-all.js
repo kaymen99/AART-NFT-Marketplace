@@ -26,15 +26,14 @@ async function main() {
 
   /* transfer contracts addresses & ABIs to the front-end */
   if (fs.existsSync("../front-end/src")) {
+    fs.rmSync("../src/artifacts", { recursive: true, force: true });
     fse.copySync("./artifacts/contracts", "../front-end/src/artifacts");
     fs.writeFileSync(
       "../front-end/src/utils/contracts-config.js",
-      `
-      export const marketContractAddress = "${marketContract.address}"
+      `export const marketContractAddress = "${marketContract.address}"
       export const nftContractAddress = "${nftContract.address}"
       export const ownerAddress = "${nftContract.signer.address}"
-      export const networkDeployedTo = "${hre.network.config.chainId}"
-    `
+      export const networkDeployedTo = "${hre.network.config.chainId}"`
     );
   }
 
