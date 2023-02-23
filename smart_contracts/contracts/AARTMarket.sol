@@ -65,15 +65,14 @@ contract AARTMarket is
             revert AARTMarket_ItemNotApproved(_tokenId);
 
         listingId = _listings.length;
+        _listings.push();
 
-        Listing memory listingItem;
+        Listing storage listingItem = _listings[listingId];
         listingItem.tokenId = _tokenId;
         listingItem.seller = msg.sender;
         listingItem.paymentToken = _paymentToken;
         listingItem.buyPrice = _buyPrice;
         listingItem.status = ListingStatus.Active;
-
-        _listings.push(listingItem);
 
         emit ItemListed(listingId, msg.sender, _tokenId);
     }
@@ -148,21 +147,20 @@ contract AARTMarket is
         }
 
         offerId = _offers[_tokenId].length;
+        _offers[_tokenId].push();
 
-        Offer memory offer;
+        Offer storage offer = _offers[_tokenId][offerId];
         offer.offerer = msg.sender;
         offer.paymentToken = _paymentToken;
         offer.price = _offerPrice;
         offer.expireTime = uint128(_expirationTime);
         offer.status = OfferStatus.Active;
 
-        _offers[_tokenId].push(offer);
-
         emit NewOffer(offerId, _tokenId, msg.sender);
     }
 
     function acceptOffer(uint256 _tokenId, uint256 _offerId) external {
-        Offer memory offer = _offers[_tokenId][_offerId];
+        Offer storage offer = _offers[_tokenId][_offerId];
 
         _isAARTTokenOwner(_tokenId, msg.sender);
 
@@ -178,7 +176,7 @@ contract AARTMarket is
             offer.price
         );
 
-        _offers[_tokenId][_offerId].status = OfferStatus.Ended;
+        offer.status = OfferStatus.Ended;
 
         // transfer nft to this contract
         nftContract.safeTransferFrom(msg.sender, offer.offerer, _tokenId);
@@ -187,14 +185,14 @@ contract AARTMarket is
     }
 
     function cancelOffer(uint256 _tokenId, uint256 _offerId) external {
-        Offer memory offer = _offers[_tokenId][_offerId];
+        Offer storage offer = _offers[_tokenId][_offerId];
 
         if (msg.sender != offer.offerer)
             revert AARTMarket_OnlyOfferer(_offerId, _tokenId);
         if (_offerStatus(_tokenId, _offerId) != OfferStatus.Active)
             revert AARTMarket_OfferNotActive(_offerId, _tokenId);
 
-        _offers[_tokenId][_offerId].status = OfferStatus.Ended;
+        offer.status = OfferStatus.Ended;
 
         if (offer.paymentToken == address(0)) {
             // return MATIC amount escowed when creating offer to offerer
@@ -230,8 +228,9 @@ contract AARTMarket is
             revert AARTMarket_InvalidDirectBuyPrice(_directBuyPrice);
 
         auctionId = _auctions.length;
+        _auctions.push();
 
-        Auction memory _auction;
+        Auction storage _auction = _auctions[auctionId];
         _auction.tokenId = _tokenId;
         _auction.seller = msg.sender;
         _auction.paymentToken = _paymentToken;
@@ -241,8 +240,6 @@ contract AARTMarket is
         _auction.endTime = uint128(_endTime);
         _auction.status = AuctionStatus.Open;
 
-        _auctions.push(_auction);
-
         // transfer nft to this contract
         nftContract.safeTransferFrom(msg.sender, address(this), _tokenId);
 
@@ -250,14 +247,15 @@ contract AARTMarket is
     }
 
     function bid(uint256 _auctionId, uint256 _amount) external payable {
-        Auction memory _auction = _auctions[_auctionId];
+        Auction storage _auction = _auctions[_auctionId];
 
         if (_auctionStatus(_auctionId) != AuctionStatus.Open)
             revert AARTMarket_AuctionNotOpen(_auctionId);
         if (msg.sender == _auction.highestBidder)
             revert AARTMarket_AlreadyHighestBid(_auctionId);
 
-        if (_auction.paymentToken == address(0)) {
+        address token = _auction.paymentToken;
+        if (token == address(0)) {
             _amount = msg.value;
         }
 
@@ -271,50 +269,36 @@ contract AARTMarket is
                 revert AARTMarket_InsufficientBid(_auctionId);
         }
 
-        if (_auction.paymentToken != address(0)) {
-            IERC20(_auction.paymentToken).transferFrom(
-                msg.sender,
-                address(this),
-                _amount
-            );
+        if (token != address(0)) {
+            IERC20(token).transferFrom(msg.sender, address(this), _amount);
         }
 
-        auctionBidderAmounts[_auctionId][msg.sender] += _amount;
-
-        _auctions[_auctionId].highestBidder = msg.sender;
-        _auctions[_auctionId].highestBid = oldBidAmount + _amount;
+        auctionBidderAmounts[_auctionId][msg.sender] = oldBidAmount + _amount;
+        _auction.highestBidder = msg.sender;
+        _auction.highestBid = oldBidAmount + _amount;
 
         emit NewBid(_auctionId, msg.sender, oldBidAmount + _amount);
     }
 
     function directBuyAuction(uint256 _auctionId) external payable {
-        Auction memory _auction = _auctions[_auctionId];
+        Auction storage _auction = _auctions[_auctionId];
 
         if (_auctionStatus(_auctionId) != AuctionStatus.Open)
             revert AARTMarket_AuctionNotOpen(_auctionId);
 
-        if (
-            _auction.paymentToken == address(0) &&
-            msg.value != _auction.directBuyPrice
-        ) revert AARTMarket_InsufficientAmount();
+        uint256 tokenId = _auction.tokenId;
+        address token = _auction.paymentToken;
+        uint256 price = _auction.directBuyPrice;
+        if (token == address(0) && msg.value != price)
+            revert AARTMarket_InsufficientAmount();
 
         // handle payment
-        _handlePayment(
-            _auction.tokenId,
-            _auction.seller,
-            msg.sender,
-            _auction.paymentToken,
-            _auction.directBuyPrice
-        );
+        _handlePayment(tokenId, _auction.seller, msg.sender, token, price);
 
-        _auctions[_auctionId].status = AuctionStatus.DirectBuy;
+        _auction.status = AuctionStatus.DirectBuy;
 
         // transfer nft to the buyer
-        nftContract.safeTransferFrom(
-            address(this),
-            msg.sender,
-            _auction.tokenId
-        );
+        nftContract.safeTransferFrom(address(this), msg.sender, tokenId);
 
         emit AuctionDirectBuy(_auctionId, msg.sender);
     }
@@ -341,12 +325,17 @@ contract AARTMarket is
     }
 
     function endAuction(uint256 _auctionId) external {
-        Auction memory _auction = _auctions[_auctionId];
+        Auction storage _auction = _auctions[_auctionId];
 
         if (
             _auctionStatus(_auctionId) != AuctionStatus.Ended ||
             _auction.status != AuctionStatus.Open
         ) revert AARTMarket_AuctionPeriodNotEnded(_auctionId, _auction.endTime);
+
+        uint256 tokenId = _auction.tokenId;
+
+        // update auction status
+        _auction.status = AuctionStatus.Ended;
 
         address buyer;
         if (_auction.highestBidder != address(0)) {
@@ -354,29 +343,21 @@ contract AARTMarket is
 
             // handle payment
             _handlePayment(
-                _auction.tokenId,
+                tokenId,
                 _auction.seller,
                 address(this),
                 _auction.paymentToken,
                 _auction.highestBid
             );
 
-            _auctions[_auctionId].status = AuctionStatus.Ended;
-
             // transfer nft to the highest bidder
-            nftContract.safeTransferFrom(
-                address(this),
-                buyer,
-                _auction.tokenId
-            );
+            nftContract.safeTransferFrom(address(this), buyer, tokenId);
         } else {
-            _auctions[_auctionId].status = AuctionStatus.Ended;
-
             // transfer nft back to the seller
             nftContract.safeTransferFrom(
                 address(this),
                 _auction.seller,
-                _auction.tokenId
+                tokenId
             );
         }
 
@@ -441,7 +422,7 @@ contract AARTMarket is
         }
 
         if (seller != royaltyReceiver && royaltyAmount != 0) {
-            // pay NFT creator royalty in Matic
+            // pay NFT creator royalty fee
             PaymentLib.transferToken(
                 paymentToken,
                 buyer,
@@ -478,12 +459,14 @@ contract AARTMarket is
         view
         returns (AuctionStatus)
     {
-        Auction memory auction = _auctions[auctionId];
+        Auction storage auction = _auctions[auctionId];
+        AuctionStatus status = auction.status;
+
         if (
-            auction.status == AuctionStatus.Canceled ||
-            auction.status == AuctionStatus.DirectBuy
+            status == AuctionStatus.Canceled ||
+            status == AuctionStatus.DirectBuy
         ) {
-            return auction.status;
+            return status;
         } else if (auction.startTime > block.timestamp) {
             return AuctionStatus.Closed;
         } else if (block.timestamp <= auction.endTime) {
