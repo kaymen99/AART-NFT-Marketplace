@@ -1,0 +1,66 @@
+/************ Banner Css ************/
+
+.banner {
+  margin-top: 0;
+  padding: 220px 0 160px 0;
+}
+.banner .tagline {
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 8px 10px;
+  background: linear-gradient(
+    90.21deg,
+    rgba(170, 54, 99, 0.5) -5.91%,
+    rgba(34, 21, 90, 0.5) 111.58%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  font-size: 20px;
+  margin-bottom: 16px;
+  display: inline-block;
+}
+.banner h1 {
+  font-size: 45px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  line-height: 1;
+  margin-bottom: 20px;
+  display: block;
+}
+.banner p {
+  color: #b8b8b8;
+  font-size: 16px;
+  letter-spacing: 0.8px;
+  line-height: 1.5em;
+  width: 96%;
+}
+
+.banner img {
+  width: 100%;
+  height: auto;
+  padding-top: 20px;
+  animation: updown 3s linear infinite;
+}
+@keyframes updown {
+  0% {
+    transform: translateY(-20px);
+  }
+  50% {
+    transform: translateY(20px);
+  }
+  100% {
+    transform: translateY(-20px);
+  }
+}
+.txt-rotate > .wrap {
+  border-right: 0.08em solid #666;
+}
+
+@media (max-width: 667px) {
+  .banner {
+    margin-top: 0;
+    padding: 160px 0 100px 0;
+  }
+  .banner img {
+    display: none;
+  }
+}

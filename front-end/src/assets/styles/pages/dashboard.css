@@ -1,0 +1,33 @@
+.dashboard {
+  padding: 4rem 0px !important;
+}
+
+.dashboard-container {
+  display: flex;
+  margin-top: 4rem;
+  margin-left: 4rem;
+  font-family: var(--font-family);
+  width: 90%;
+}
+
+.dashboard-items {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  margin: auto;
+  padding: 20px;
+}
+
+@media screen and (max-width: 750px) {
+  .dashboard-container {
+    margin-left: 1.5rem;
+  }
+}
+
+@media screen and (max-width: 500px) {
+  .dashboard-container {
+    margin-left: 0;
+    width: 100%;
+  }
+}

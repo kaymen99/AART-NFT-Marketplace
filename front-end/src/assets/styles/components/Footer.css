@@ -1,0 +1,23 @@
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 4rem;
+  width: 100%;
+}
+
+.footer p {
+  font-size: 0.938rem;
+}
+
+@media (max-width: 767px) {
+  .footer {
+    flex-direction: row;
+    row-gap: 1rem;
+    text-align: center;
+  }
+
+  .footer p {
+    font-size: 14px;
+  }
+}

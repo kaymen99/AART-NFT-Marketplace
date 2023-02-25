@@ -1,0 +1,222 @@
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  position: absolute;
+  top: 30px;
+}
+
+.header a {
+  text-decoration: none;
+  color: #fff;
+}
+
+.brand-logo img {
+  margin-left: 85px;
+  width: 140px;
+  height: 50px;
+}
+
+.nav-link-ref {
+  text-decoration: none;
+  display: block;
+  padding: 15px;
+  color: #fff;
+  margin-bottom: 5px;
+  margin-right: 8px;
+}
+
+.nav-link-ref:hover {
+  background-color: #510c25;
+  color: #fff;
+  border-radius: 20px;
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.is-active {
+  display: none;
+}
+
+.account {
+  position: absolute;
+  padding: 1.5rem 0.5rem;
+  box-shadow: #151c25;
+  font-size: 1rem;
+  width: 18rem;
+  border-radius: 1rem;
+  right: 0px;
+  top: 3.5rem;
+  z-index: 22222222222;
+  background-color: #151c25;
+}
+
+.account-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+  padding: 1.5rem;
+}
+
+.account-img {
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+}
+
+.account-info {
+  line-height: 0.3;
+  padding-top: 10px;
+}
+
+.account-info p {
+  font-weight: 600;
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.3rem 1.5rem;
+  transition: all 0.3s ease-in;
+}
+
+.account-menu-item:hover {
+  color: #e32970;
+}
+
+.account-menu-item a:hover {
+  color: #e32970;
+}
+
+.navbar-container-account-box {
+  position: relative;
+  cursor: pointer;
+}
+
+.navbar-container-account {
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+}
+
+@media (max-width: 867px) {
+  .nav-custom {
+    background: hsla(339, 49%, 30%, 1);
+    height: 100%;
+    width: 0;
+    position: fixed;
+    z-index: 20;
+    top: 0;
+    right: 0;
+    overflow-x: hidden;
+    transition: 0.5s;
+  }
+
+  .connect-btn {
+    margin-left: 10px;
+  }
+
+  .open-menu {
+    width: 250px;
+  }
+
+  .nav-burger {
+    position: absolute;
+    top: 6px;
+    right: 55px;
+  }
+
+  .nav-cancel {
+    position: absolute;
+    top: 35px;
+    right: 45px;
+  }
+
+  .nav-links-div {
+    padding-top: 100px;
+    padding-left: 10px;
+  }
+
+  .nav-link-ref {
+    text-decoration: none;
+    display: block;
+    margin-bottom: 5px;
+    padding: 5px;
+    color: #fff;
+  }
+
+  .navbar-container-account-box {
+    padding-left: 10px;
+  }
+
+  .account {
+    position: absolute;
+    padding: 0.5rem 0.2rem;
+    box-shadow: #151c25;
+    font-size: 12px;
+    width: 200px;
+    border-radius: 1rem;
+    right: 25px;
+    z-index: 22222222222;
+    background-color: #151c25;
+  }
+
+  .account-info {
+    line-height: 0.3;
+    padding-top: 0px;
+  }
+
+  .account-img {
+    display: none;
+  }
+  .nav-link-ref:hover {
+    width: 140px;
+    background-color: #510c25;
+    color: #fff;
+    border-radius: 20px;
+    text-decoration: none;
+    opacity: 0.9;
+  }
+}
+
+@media (min-width: 868px) {
+  .nav-burger {
+    display: none;
+  }
+  .nav-cancel {
+    display: none;
+  }
+  .nav-custom {
+    display: block;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    font-size: 1.1rem;
+    margin-right: 40px;
+  }
+  .nav-link-ref {
+    text-decoration: none;
+    display: inline-block;
+    padding: 15px 15px;
+    color: #212529;
+  }
+}
+
+@media (max-width: 570px) {
+  .brand-logo img {
+    width: 120px;
+    height: 42px;
+    margin-left: 20px;
+  }
+  .nav-burger {
+    position: absolute;
+    top: 6px;
+    right: 35px;
+  }
+  .nav-cancel {
+    position: absolute;
+    top: 35px;
+    right: 25px;
+  }
+}
