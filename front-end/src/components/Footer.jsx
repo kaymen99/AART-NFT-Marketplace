@@ -8,13 +8,13 @@ function Footer() {
     <div className="footer container">
       <p>AART&#169; All Right Reserved</p>
       <div className="social">
-        <a href="https://github.com/Aymen1001">
+        <a href="https://github.com/kaymen99">
           <AiOutlineGithub size={20} color="#fff" />
         </a>
-        <a href="https://github.com/Aymen1001">
+        <a href="https://github.com/kaymen99">
           <AiOutlineTwitter size={20} color="#fff" />
         </a>
-        <a href="https://github.com/Aymen1001">
+        <a href="https://github.com/kaymen99">
           <RiDiscordFill size={20} color="#fff" />
         </a>
       </div>
