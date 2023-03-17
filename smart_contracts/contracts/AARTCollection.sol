@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "./interfaces/IArtists.sol";
 
 contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
     //--------------------------------------------------------------------
@@ -20,6 +21,9 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
 
     // mint fee in MATIC
     uint256 public mintFee = 10;
+
+    // AART artists profile nft contract
+    address public immutable artistsNftContract;
 
     mapping(uint256 => string) private _tokenURIs;
 
@@ -39,10 +43,13 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
 
     error AART__ContractIsPaused();
     error AART__InsufficientAmount();
+    error AART__OnlyRegisteredUser();
 
-    constructor(uint256 _mintingFee)
-        ERC721("Artifciel Art Collectible", "AART")
-    {
+    constructor(
+        address _artistsNftContract,
+        uint256 _mintingFee
+    ) ERC721("Artifciel Art Collectible", "AART") {
+        artistsNftContract = _artistsNftContract;
         mintFee = _mintingFee;
 
         // default royalty == 0%
@@ -53,11 +60,10 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
     //      Main Functions      //
     // ************************ //
 
-    function mintNFT(address recipient, string memory uri)
-        external
-        payable
-        returns (uint256)
-    {
+    function mintNFT(
+        address recipient,
+        string memory uri
+    ) external payable returns (uint256) {
         return _mintNFT(recipient, uri);
     }
 
@@ -73,11 +79,13 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         return tokenId;
     }
 
-    function _mintNFT(address recipient, string memory uri)
-        internal
-        returns (uint256)
-    {
+    function _mintNFT(
+        address recipient,
+        string memory uri
+    ) internal returns (uint256) {
         if (paused == 1) revert AART__ContractIsPaused();
+        if (!IArtists(artistsNftContract).hasProfile(msg.sender))
+            revert AART__OnlyRegisteredUser();
         if (msg.value != mintFee) revert AART__InsufficientAmount();
 
         uint256 tokenId = _tokenIds.current();
@@ -89,13 +97,9 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         return tokenId;
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override(ERC721, ERC2981)
-        returns (bool)
-    {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(ERC721, ERC2981) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -104,10 +108,10 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         _resetTokenRoyalty(tokenId);
     }
 
-    function _setTokenURI(uint256 tokenId, string memory _tokenURI)
-        internal
-        override
-    {
+    function _setTokenURI(
+        uint256 tokenId,
+        string memory _tokenURI
+    ) internal override {
         _tokenURIs[tokenId] = _tokenURI;
     }
 
@@ -115,21 +119,17 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
     //      Getters      //
     // ***************** //
 
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        virtual
-        override
-        returns (string memory)
-    {
+    function tokenURI(
+        uint256 tokenId
+    ) public view virtual override returns (string memory) {
         return _tokenURIs[tokenId];
     }
 
-    function getAllNfts() public view returns (ArtRender[] memory) {
+    function getAllNfts() external view returns (ArtRender[] memory) {
         uint256 lastestId = _tokenIds.current();
         ArtRender[] memory items = new ArtRender[](lastestId);
         for (uint256 i; i < lastestId; ) {
-            string memory uri = tokenURI(i);
+            string memory uri = _tokenURIs[i];
             items[i] = ArtRender(i, uri);
 
             unchecked {
@@ -139,11 +139,9 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         return items;
     }
 
-    function getUserNfts(address account)
-        public
-        view
-        returns (ArtRender[] memory)
-    {
+    function getUserNfts(
+        address account
+    ) external view returns (ArtRender[] memory) {
         uint256 lastestId = _tokenIds.current();
         uint256 nftsCount = balanceOf(account);
 
@@ -152,7 +150,7 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
         uint256 counter;
         for (uint256 i; i < lastestId; ) {
             if (ownerOf(i) == account) {
-                string memory uri = tokenURI(i);
+                string memory uri = _tokenURIs[i];
                 items[counter] = ArtRender(i, uri);
                 counter++;
             }
@@ -161,10 +159,6 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
             }
         }
         return items;
-    }
-
-    function getMintingFee() external view returns (uint256) {
-        return mintFee;
     }
 
     // ******************* //
@@ -182,7 +176,7 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
     }
 
     function withdraw() external payable onlyOwner {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}(
+        (bool success, ) = payable(msg.sender).call{value: address(this).balance}(
             ""
         );
         require(success);
