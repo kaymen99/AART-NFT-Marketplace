@@ -32,7 +32,7 @@ contract AARTArtists is ERC721URIStorage, Ownable {
 
     error AART__AlreadyRegistered();
     error AART__OnlyEOA();
-    error AART__OnlyTokenOwner(uint256 tokenId);
+    error AART__OnlyTokenOwner(uint tokenId);
 
     constructor() ERC721("AART Artists Profiles", "AAP") {}
 
@@ -43,9 +43,6 @@ contract AARTArtists is ERC721URIStorage, Ownable {
     function create(string memory uri) external returns (uint256) {
         // Each address can only have one profile nft associated with it
         if (hasProfile(msg.sender)) revert AART__AlreadyRegistered();
-
-        // Only EOA accounts can have profile NFT
-        if (address(msg.sender).code.length != 0) revert AART__OnlyEOA();
 
         uint256 tokenId = _tokenIds.current();
         _tokenIds.increment();
@@ -82,6 +79,11 @@ contract AARTArtists is ERC721URIStorage, Ownable {
 
     function _burn(uint256 tokenId) internal virtual override {
         super._burn(tokenId);
+    }
+
+    // Disable all ERC721 transfers : the artists NFT profile are not transferable
+    function _transfer(address, address, uint256) internal virtual override {
+        revert("AART profile NFTs are not transferable");
     }
 
     function _setTokenURI(
