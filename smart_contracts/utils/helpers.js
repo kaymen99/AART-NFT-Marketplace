@@ -49,6 +49,13 @@ async function approveERC20(account, erc20Address, approvedAmount, spender) {
   await tx.wait(1);
 }
 
+async function deployArtistsContract() {
+  const Contract = await ethers.getContractFactory("AARTArtists");
+  let contract = await Contract.deploy();
+  await contract.deployed();
+  return contract;
+}
+
 async function deployNFTContract(deployer) {
   const mintFee = getAmountInWei(10);
   // Deploy NFT Collection contract
@@ -94,6 +101,7 @@ module.exports = {
   approveERC20,
   resetTime,
   moveTimeTo,
+  deployArtistsContract,
   deployNFTContract,
   mintNewNFT,
   mintNewNFTWithRoyalty,
