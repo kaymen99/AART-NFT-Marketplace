@@ -107,5 +107,41 @@ async function deploy() {
             expect(await contract.hasProfile(user1.address)).to.equal(false);
           });
         });
+        describe("ERC721 Transfer functions", () => {
+          let tokenId;
+          before(async () => {
+            contract = await deploy();
+
+            // create a new profile
+            await contract.connect(user1).create(TEST_URI);
+            tokenId = 0;
+          });
+          it("All transfer functions should always revert", async () => {
+            await expect(
+              contract
+                .connect(user1)
+                .transferFrom(user1.address, randomUser.address, tokenId)
+            ).to.be.revertedWith("AART profile NFTs are not transferable");
+            await expect(
+              contract
+                .connect(user1)
+                ["safeTransferFrom(address,address,uint256)"](
+                  user1.address,
+                  randomUser.address,
+                  tokenId
+                )
+            ).to.be.revertedWith("AART profile NFTs are not transferable");
+            await expect(
+              contract
+                .connect(user1)
+                ["safeTransferFrom(address,address,uint256,bytes)"](
+                  user1.address,
+                  randomUser.address,
+                  tokenId,
+                  ethers.constants.HashZero
+                )
+            ).to.be.revertedWith("AART profile NFTs are not transferable");
+          });
+        });
       });
     });
