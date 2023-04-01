@@ -8,6 +8,7 @@ import {
   AuctionPage,
   AuctionListing,
   ProfilePage,
+  RegisterPage,
 } from "./pages";
 import { NavBar, Footer } from "./components";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
@@ -27,6 +28,7 @@ function App() {
           <Route path="/auction-page/:id" element={<AuctionPage />} />
           <Route path="/create-nft" element={<CreateNFT />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </Router>
