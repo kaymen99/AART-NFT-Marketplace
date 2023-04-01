@@ -52,6 +52,16 @@ async function deploy() {
             expect(profiles.length).to.equal(1);
             expect(profiles[0].id).to.equal(tokenId);
             expect(profiles[0].uri).to.equal(TEST_URI);
+
+            const userProfile = await contract.getUserProfile(user1.address);
+            expect(userProfile.id).to.equal(tokenId);
+            expect(userProfile.uri).to.equal(TEST_URI);
+
+            const userProfile2 = await contract.getUserProfile(
+              randomUser.address
+            );
+            expect(userProfile2.id).to.equal(0);
+            expect(userProfile2.uri).to.equal("");
           });
           it("should revert if user already has profile", async () => {
             await expect(
@@ -78,11 +88,19 @@ async function deploy() {
             ).to.be.revertedWithCustomError(contract, "AART__OnlyTokenOwner");
           });
           it("should allow user to update his artist profile", async () => {
+            let userProfile = await contract.getUserProfile(user1.address);
+            expect(userProfile.id).to.equal(tokenId);
+            expect(userProfile.uri).to.equal(TEST_URI);
+
             const newUri = "ipfs://new-profile-uri";
             await contract.connect(user1).update(tokenId, newUri);
 
             expect(await contract.balanceOf(user1.address)).to.equal(1);
             expect(await contract.tokenURI(tokenId)).to.equal(newUri);
+
+            userProfile = await contract.getUserProfile(user1.address);
+            expect(userProfile.id).to.equal(tokenId);
+            expect(userProfile.uri).to.equal(newUri);
           });
         });
         describe("burn()", () => {
@@ -105,6 +123,10 @@ async function deploy() {
 
             expect(await contract.balanceOf(user1.address)).to.equal(0);
             expect(await contract.hasProfile(user1.address)).to.equal(false);
+
+            const userProfile = await contract.getUserProfile(user1.address);
+            expect(userProfile.id).to.equal(0);
+            expect(userProfile.uri).to.equal("");
           });
         });
         describe("ERC721 Transfer functions", () => {
