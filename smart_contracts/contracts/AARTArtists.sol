@@ -107,6 +107,25 @@ contract AARTArtists is ERC721URIStorage, Ownable {
         return balanceOf(user) != 0;
     }
 
+    function getUserProfile(
+        address user
+    ) external view returns (Profile memory profile) {
+        if (hasProfile(user)) {
+            uint256 lastestId = _tokenIds.current();
+            for (uint256 i; i < lastestId; ) {
+                if (ownerOf(i) == user) {
+                    string memory uri = _tokenURIs[i];
+                    profile = Profile(i, uri);
+                    break;
+                }
+
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+    }
+
     function getAllProfiles() external view returns (Profile[] memory) {
         uint256 lastestId = _tokenIds.current();
         Profile[] memory items = new Profile[](lastestId);
