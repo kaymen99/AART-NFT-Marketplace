@@ -7,7 +7,7 @@ import {
   SalePage,
   AuctionPage,
   AuctionListing,
-  ProfilePage,
+  CreatorPage,
   RegisterPage,
 } from "./pages";
 import { NavBar, Footer } from "./components";
@@ -27,7 +27,7 @@ function App() {
           <Route path="/sale-page/:id" element={<SalePage />} />
           <Route path="/auction-page/:id" element={<AuctionPage />} />
           <Route path="/create-nft" element={<CreateNFT />} />
-          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/creator-profile/:creator" element={<CreatorPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
