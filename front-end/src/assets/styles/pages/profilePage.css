@@ -1,9 +1,11 @@
 .profile {
-  padding: 4rem 0px !important;
+  padding-top: 4.2rem !important;
+  padding-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
 }
 .profile-top {
-  position: relative;
-  padding-bottom: 3.75rem;
+  padding-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -87,6 +89,9 @@
 @media screen and (max-width: 500px) {
   .profile-top {
     padding-bottom: 1rem;
+  }
+  .profile-pic img {
+    width: 40%;
   }
   .profile-banner img {
     width: 100%;
