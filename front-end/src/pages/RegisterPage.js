@@ -1,6 +1,4 @@
 import "./../assets/styles/pages/registerPage.css";
-import images from "../assets/images";
-
 import React, { useState, useEffect } from "react";
 import { CircularProgress } from "@mui/material";
 import { useSelector } from "react-redux";
@@ -21,7 +19,7 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState({
     name: "",
-    image: images.user,
+    image: "",
   });
   const [formInput, setFormInput] = useState({
     username: "",
@@ -81,44 +79,47 @@ const RegisterPage = () => {
 
   const register = async () => {
     if (wallet.network === networksMap[networkDeployedTo]) {
-      setLoading(true);
-      const provider = new ethers.providers.Web3Provider(
-        window.ethereum,
-        "any"
-      );
-      const signer = provider.getSigner();
-      const artists_contract = new ethers.Contract(
-        artistsContractAddress,
-        artistsContract.abi,
-        signer
-      );
-
-      let cid = await saveContent(image.image);
-      const imageUri = `ipfs://${cid}/${image.name}`;
-
-      const metadata = {
-        username: formInput.username,
-        description: formInput.description,
-        imageUri: imageUri,
-      };
-      const data = JSON.stringify(metadata);
-
-      let tokenId = await artists_contract.callStatic.create("test-uri");
-
-      const metadataCid = await saveContent(
-        new File([data], `AART-Artist-${tokenId}.json`)
-      );
-      const metadataIpfsHash = `ipfs://${metadataCid}/AART-Artist-${tokenId}.json`;
-
       try {
+        setLoading(true);
+        const provider = new ethers.providers.Web3Provider(
+          window.ethereum,
+          "any"
+        );
+        const signer = provider.getSigner();
+        const artists_contract = new ethers.Contract(
+          artistsContractAddress,
+          artistsContract.abi,
+          signer
+        );
+
+        let cid = await saveContent(image.image);
+        const imageUri = `ipfs://${cid}/${image.name}`;
+
+        const metadata = {
+          username: formInput.username,
+          description: formInput.description,
+          imageUri: imageUri,
+        };
+        const data = JSON.stringify(metadata);
+
+        let tokenId = await artists_contract.callStatic.create("test-uri");
+
+        const metadataCid = await saveContent(
+          new File([data], `AART-Artist-${Number(tokenId)}.json`)
+        );
+        const metadataIpfsHash = `ipfs://${metadataCid}/AART-Artist-${Number(
+          tokenId
+        )}.json`;
+
         const register_tx = await artists_contract.create(metadataIpfsHash);
         await register_tx.wait();
+
+        setLoading(false);
       } catch (error) {
         setLoading(false);
         console.log(error);
         window.alert("An error has occured, please try again");
       }
-      setLoading(false);
     }
   };
 
@@ -127,71 +128,72 @@ const RegisterPage = () => {
       wallet.network === networksMap[networkDeployedTo] &&
       profile.hasProfile
     ) {
-      setLoading(true);
-      const provider = new ethers.providers.Web3Provider(
-        window.ethereum,
-        "any"
-      );
-      const signer = provider.getSigner();
-      const artists_contract = new ethers.Contract(
-        artistsContractAddress,
-        artistsContract.abi,
-        signer
-      );
-
-      if (
-        image.image === null &&
-        formInput.username === "" &&
-        formInput.description === ""
-      )
-        return;
-
-      let newUsername;
-      let newDescription;
-      let newImageUri;
-      if (image.image !== null) {
-        let cid = await saveContent(image.image);
-        newImageUri = `ipfs://${cid}/${image.name}`;
-      } else {
-        newImageUri = profile.imageUri;
-      }
-
-      if (formInput.username !== "") {
-        newUsername = formInput.username;
-      } else {
-        newUsername = profile.username;
-      }
-
-      if (formInput.description !== "") {
-        newDescription = formInput.description;
-      } else {
-        newDescription = profile.description;
-      }
-
-      const metadata = {
-        username: newUsername,
-        description: newDescription,
-        imageUri: newImageUri,
-      };
-      const data = JSON.stringify(metadata);
-
-      const metadataCid = await saveContent(
-        new File([data], `AART-Artist-${profile.tokenId}.json`)
-      );
-      const metadataIpfsHash = `ipfs://${metadataCid}/AART-Artist-${profile.tokenId}.json`;
-
       try {
-        const edit_tx = await artists_contract.edit(
+        setLoading(true);
+        const provider = new ethers.providers.Web3Provider(
+          window.ethereum,
+          "any"
+        );
+        const signer = provider.getSigner();
+        const artists_contract = new ethers.Contract(
+          artistsContractAddress,
+          artistsContract.abi,
+          signer
+        );
+
+        if (
+          image.image === null &&
+          formInput.username === "" &&
+          formInput.description === ""
+        )
+          return;
+
+        let newUsername;
+        let newDescription;
+        let newImageUri;
+        if (image.image !== null) {
+          let cid = await saveContent(image.image);
+          newImageUri = `ipfs://${cid}/${image.name}`;
+        } else {
+          newImageUri = profile.imageUri;
+        }
+
+        if (formInput.username !== "") {
+          newUsername = formInput.username;
+        } else {
+          newUsername = profile.username;
+        }
+
+        if (formInput.description !== "") {
+          newDescription = formInput.description;
+        } else {
+          newDescription = profile.description;
+        }
+
+        const metadata = {
+          username: newUsername,
+          description: newDescription,
+          imageUri: newImageUri,
+        };
+        const data = JSON.stringify(metadata);
+
+        const metadataCid = await saveContent(
+          new File([data], `AART-Artist-${profile.tokenId}.json`)
+        );
+        const metadataIpfsHash = `ipfs://${metadataCid}/AART-Artist-${profile.tokenId}.json`;
+
+        const edit_tx = await artists_contract.update(
           profile.tokenId,
           metadataIpfsHash
         );
         await edit_tx.wait();
+
+        setLoading(false);
       } catch (error) {
         setLoading(false);
         console.log(error);
         window.alert("An error has occured, please try again");
       }
-      setLoading(false);
     }
   };
 
@@ -200,27 +202,28 @@ const RegisterPage = () => {
       wallet.network === networksMap[networkDeployedTo] &&
       profile.hasProfile
     ) {
-      setLoading(true);
-      const provider = new ethers.providers.Web3Provider(
-        window.ethereum,
-        "any"
-      );
-      const signer = provider.getSigner();
-      const artists_contract = new ethers.Contract(
-        artistsContractAddress,
-        artistsContract.abi,
-        signer
-      );
-
       try {
+        setLoading(true);
+        const provider = new ethers.providers.Web3Provider(
+          window.ethereum,
+          "any"
+        );
+        const signer = provider.getSigner();
+        const artists_contract = new ethers.Contract(
+          artistsContractAddress,
+          artistsContract.abi,
+          signer
+        );
+
         const remove_tx = await artists_contract.burn(profile.tokenId);
         await remove_tx.wait();
+
+        setLoading(false);
       } catch (error) {
         setLoading(false);
         console.log(error);
         window.alert("An error has occured, please try again");
       }
-      setLoading(false);
     }
   };
 
@@ -230,17 +233,10 @@ const RegisterPage = () => {
     };
     get();
   }, []);
-  
-  useEffect(() => {
-    const get = async () => {
-      await getUserProfile();
-    };
-    get();
-  }, [wallet.account]);
 
   return (
     <>
-      <div className="profile">
+      <div className="register">
         <div className="profile-image">
           <div className="profile-image-box">
             <img
@@ -268,7 +264,9 @@ const RegisterPage = () => {
           </div>
         </div>
         <div className="profile-content">
-          <h1 className="profile-title">Create new Item</h1>
+          <h1 className="profile-title">
+            {profile.hasProfile ? "Edit Your profile" : "Create Your profile"}
+          </h1>
           <form className="writeForm" autoComplete="off">
             <div className="formGroup">
               <label>Username</label>
