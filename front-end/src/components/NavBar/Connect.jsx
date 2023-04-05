@@ -9,13 +9,14 @@ import Account from "./Account";
 import images from "../../assets/images";
 import networks from "../../utils/networksMap.json";
 import useComponentVisible from "../../hooks/visible";
+import Button from "../Button";
 
 const eth = window.ethereum;
 let web3Modal = new Web3Modal();
 
 function Connect() {
   const dispatch = useDispatch();
-  const data = useSelector((state) => state.blockchain.value);
+  const wallet = useSelector((state) => state.blockchain.value);
 
   const [injectedProvider, setInjectedProvider] = useState();
   const [profile, setProfile] = useState(false);
@@ -82,7 +83,7 @@ function Connect() {
     }
   }, []);
 
-  const isConnected = data.account !== "";
+  const isConnected = wallet.account !== "";
 
   return (
     <>
@@ -101,7 +102,7 @@ function Connect() {
 
               {profile && isComponentVisible && (
                 <Account
-                  currentAccount={data.account}
+                  currentAccount={wallet.account}
                   disconnect={Disconnect}
                 />
               )}
@@ -109,9 +110,7 @@ function Connect() {
           </div>
         </>
       ) : (
-        <button className="connect-btn" onClick={fetchAccountData}>
-          Connect Wallet
-        </button>
+        <Button btnName="Connect Wallet" handleClick={fetchAccountData} />
       )}
     </>
   );
