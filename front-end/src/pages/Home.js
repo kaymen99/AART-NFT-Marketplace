@@ -2,22 +2,24 @@ import React from "react";
 import "../assets/styles/pages/home.css";
 import {
   NavBar,
-  Banner,
+  Hero,
   Services,
   AuctionSlider,
   HotSales,
   Footer,
+  Banner,
 } from "../components";
 
 const Home = () => {
   return (
     <div className="home">
       <NavBar />
-      <Banner />
+      <Hero />
       <Services />
       {/* <Sellers /> */}
       <AuctionSlider />
       <HotSales />
+      <Banner />
       <Footer />
     </div>
   );
