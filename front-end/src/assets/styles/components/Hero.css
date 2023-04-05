@@ -1,10 +1,8 @@
-/************ Banner Css ************/
-
-.banner {
+hero {
   margin-top: 0;
   padding: 220px 0 160px 0;
 }
-.banner .tagline {
+.hero .tagline {
   font-weight: 700;
   letter-spacing: 0.8px;
   padding: 8px 10px;
@@ -18,7 +16,7 @@
   margin-bottom: 16px;
   display: inline-block;
 }
-.banner h1 {
+.hero h1 {
   font-size: 45px;
   font-weight: 700;
   letter-spacing: 0.8px;
@@ -26,7 +24,7 @@
   margin-bottom: 20px;
   display: block;
 }
-.banner p {
+.hero p {
   color: #b8b8b8;
   font-size: 16px;
   letter-spacing: 0.8px;
@@ -34,7 +32,7 @@
   width: 96%;
 }
 
-.banner img {
+.hero img {
   width: 100%;
   height: auto;
   padding-top: 20px;
@@ -56,11 +54,11 @@
 }
 
 @media (max-width: 667px) {
-  .banner {
+  .hero {
     margin-top: 0;
     padding: 160px 0 100px 0;
   }
-  .banner img {
+  .hero img {
     display: none;
   }
 }
