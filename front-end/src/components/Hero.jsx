@@ -1,13 +1,14 @@
 import React from "react";
 import "animate.css";
-import "../assets/styles/components/Banner.css";
+import "../assets/styles/components/Hero.css";
 import { Container, Row, Col } from "react-bootstrap";
 import TrackVisibility from "react-on-screen";
 import Typewriter from "typewriter-effect";
+import Button from "./Button";
 
-function Banner() {
+function Hero() {
   return (
-    <section className="banner">
+    <section className="hero">
       <Container>
         <Row className="aligh-items-center">
           <Col xs={12} md={6} xl={7}>
@@ -55,9 +56,7 @@ function Banner() {
                     type specimen book.
                   </p>
                   <div>
-                    <button className="connect-btn text-center">
-                      Start Your Journey
-                    </button>
+                    <Button btnName="Discover" />
                   </div>
                 </div>
               )}
@@ -85,4 +84,4 @@ function Banner() {
   );
 }
 
-export default Banner;
+export default Hero;
