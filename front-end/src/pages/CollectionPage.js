@@ -67,12 +67,20 @@ const CollectionPage = () => {
           <div className="listing-title">
             <h1>AART Collection</h1>
           </div>
-          <SearchBar />
-          <Listing1 items={nftsList.slice(displayed.from, displayed.to)} />
-          <Paginator
-            itemsLength={nftsList.length}
-            setShownItems={setDisplayed}
-          />
+          {nftsList.length !== 0 ? (
+            <>
+              <SearchBar />
+              <Listing1 items={nftsList.slice(displayed.from, displayed.to)} />
+              <Paginator
+                itemsLength={nftsList.length}
+                setShownItems={setDisplayed}
+              />
+            </>
+          ) : (
+            <div className="listing-text">
+              <p>No item created yet</p>
+            </div>
+          )}
         </div>
       </div>
     </>
