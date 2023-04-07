@@ -9,6 +9,7 @@ import {
   AuctionListing,
   CreatorPage,
   RegisterPage,
+  CollectionPage,
 } from "./pages";
 import { NavBar, Footer } from "./components";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
@@ -21,6 +22,7 @@ function App() {
         <br />
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/collection" element={<CollectionPage />} />
           <Route path="/sales" element={<SaleListing />} />
           <Route path="/auctions" element={<AuctionListing />} />
           <Route path="/nft-page/:id" element={<ItemPage />} />
