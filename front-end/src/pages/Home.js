@@ -1,26 +1,16 @@
 import React from "react";
 import "../assets/styles/pages/home.css";
-import {
-  NavBar,
-  Hero,
-  Services,
-  AuctionSlider,
-  HotSales,
-  Footer,
-  Banner,
-} from "../components";
+import { Hero, Services, AuctionSlider, HotSales, Banner } from "../components";
 
 const Home = () => {
   return (
-    <div className="home">
-      <NavBar />
+    <div>
       <Hero />
       <Services />
       {/* <Sellers /> */}
       <AuctionSlider />
       <HotSales />
       <Banner />
-      <Footer />
     </div>
   );
 };
