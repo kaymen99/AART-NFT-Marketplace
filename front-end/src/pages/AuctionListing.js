@@ -81,12 +81,22 @@ const AuctionListing = () => {
           <div className="listing-title">
             <h1>Auction Market</h1>
           </div>
-          <SearchBar />
-          <Listing items={auctionsList.slice(displayed.from, displayed.to)} />
-          <Paginator
-            itemsLength={auctionsList.length}
-            setShownItems={setDisplayed}
-          />
+          {auctionsList.length !== 0 ? (
+            <>
+              <SearchBar />
+              <Listing
+                items={auctionsList.slice(displayed.from, displayed.to)}
+              />
+              <Paginator
+                itemsLength={auctionsList.length}
+                setShownItems={setDisplayed}
+              />
+            </>
+          ) : (
+            <div className="listing-text">
+              <p>No live auction for the moment</p>
+            </div>
+          )}
         </div>
       </div>
     </>
