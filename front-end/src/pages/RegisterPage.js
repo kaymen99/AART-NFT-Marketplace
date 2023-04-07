@@ -12,6 +12,7 @@ import {
   networkDeployedTo,
 } from "../utils/contracts-config";
 import networksMap from "../utils/networksMap.json";
+import images from "../assets/images";
 
 const RegisterPage = () => {
   const wallet = useSelector((state) => state.blockchain.value);
@@ -19,7 +20,7 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState({
     name: "",
-    image: "",
+    image: null,
   });
   const [formInput, setFormInput] = useState({
     username: "",
@@ -229,7 +230,9 @@ const RegisterPage = () => {
 
   useEffect(() => {
     const get = async () => {
-      await getUserProfile();
+      if (window.ethereum !== undefined) {
+        await getUserProfile();
+      }
     };
     get();
   }, []);
@@ -243,7 +246,9 @@ const RegisterPage = () => {
               src={
                 profile.imageUri !== ""
                   ? profile.imageUri
-                  : URL.createObjectURL(image.image)
+                  : image.image !== null
+                  ? URL.createObjectURL(image.image)
+                  : images.user
               }
               alt="profile"
             />
@@ -257,7 +262,7 @@ const RegisterPage = () => {
                   getImage(e);
                 }}
               />
-              <label className="text" for="actual-btn">
+              <label className="text" htmlFor="actual-btn">
                 Upload
               </label>
             </div>
