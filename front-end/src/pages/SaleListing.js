@@ -12,6 +12,8 @@ import {
   networkDeployedTo,
 } from "../utils/contracts-config";
 import networksMap from "../utils/networksMap.json";
+import images from "../assets/images";
+
 
 const SaleListing = () => {
   const wallet = useSelector((state) => state.blockchain.value);
@@ -80,12 +82,20 @@ const SaleListing = () => {
           <div className="listing-title">
             <h1>Sales Market</h1>
           </div>
-          <SearchBar />
-          <Listing items={salesList.slice(displayed.from, displayed.to)} />
-          <Paginator
-            itemsLength={salesList.length}
-            setShownItems={setDisplayed}
-          />
+          {salesList.length !== 0 ? (
+            <>
+              <SearchBar />
+              <Listing items={salesList.slice(displayed.from, displayed.to)} />
+              <Paginator
+                itemsLength={salesList.length}
+                setShownItems={setDisplayed}
+              />
+            </>
+          ) : (
+            <div className="listing-text">
+              <p>No item listed yet</p>
+            </div>
+          )}
         </div>
       </div>
     </>
