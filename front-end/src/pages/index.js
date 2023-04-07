@@ -6,5 +6,6 @@ export { default as CreatorPage } from "./CreatorPage";
 export { default as CreateNFT } from "./CreateNFT";
 export { default as Dashboard } from "./Dashboard";
 export { default as RegisterPage } from "./RegisterPage";
+export { default as CollectionPage } from "./CollectionPage";
 export { default as SaleListing } from "./SaleListing";
 export { default as AuctionListing } from "./AuctionListing";
