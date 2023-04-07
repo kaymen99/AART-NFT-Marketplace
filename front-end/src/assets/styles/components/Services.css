@@ -1,0 +1,57 @@
+.service-bx {
+  background: #151c25;
+  border-radius: 64px;
+  text-align: center;
+  padding: 50px 40px;
+  margin-top: -60px;
+}
+.service h2 {
+  font-size: 40px;
+  font-weight: 700;
+}
+.service p {
+  color: #b8b8b8;
+  font-size: 14px;
+  letter-spacing: 0.6px;
+  line-height: 1em;
+  margin: 14px 0 40px 0;
+}
+
+.features-icons {
+  background: #151c25;
+}
+.features-icons-item h4 {
+  font-size: 20px;
+  font-weight: 700;
+}
+.features-icons-item p {
+  font-size: 14px;
+}
+.features-icons .features-icons-item {
+  max-width: 14rem;
+}
+.features-icons .features-icons-item .features-icons-icon {
+  height: 60px;
+}
+
+@media screen and (max-width: 687px) {
+  .service h2 {
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .service p {
+    color: #b8b8b8;
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    line-height: 1.5em;
+    margin: 14px 0 50px 0;
+  }
+
+  .features-icons-item h4 {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .features-icons-item p {
+    font-size: 12px;
+  }
+}

@@ -1,0 +1,21 @@
+.dashboard {
+  padding: 3rem 0px !important;
+  margin: 2rem 0px !important;
+}
+
+.dashboard-container {
+  padding: 40px;
+  padding-top: 4rem;
+}
+
+.dashboard-title {
+  text-align: center;
+  font-weight: 700;
+}
+
+@media screen and (max-width: 500px) {
+  .dashboard-container {
+    width: 100%;
+    padding: 4rem 0;
+  }
+}
