@@ -1,0 +1,12 @@
+export { default as NavBar } from "./NavBar/NavBar";
+export { default as AuctionSlider } from "./AuctionSlider";
+export { default as Hero } from "./Hero";
+export { default as Footer } from "./Footer";
+export { default as HotSales } from "./HotSales";
+export { default as Banner } from "./Banner";
+export { default as Listing } from "./Listing";
+export { default as Listing1 } from "./Listing1";
+export { default as Services } from "./Services";
+export { default as Sellers } from "./Sellers";
+export { default as Paginator } from "./Paginator";
+export { default as SearchBar } from "./SearchBar";
