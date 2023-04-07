@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import "../assets/styles/pages/profilePage.css";
 import images from "../assets/images";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { ethers } from "ethers";
 import axios from "axios";
-import { Listing, Paginator } from "../components";
+import { Listing1, Paginator } from "../components";
 
 import nftContract from "../artifacts/AARTCollection.sol/AARTCollection.json";
 import artistsContract from "../artifacts/AARTArtists.sol/AARTArtists.json";
@@ -17,13 +17,8 @@ import {
   networkDeployedTo,
 } from "../utils/contracts-config";
 
-const items = [
-  { name: "The sea monster", number: 22 },
-  { name: "The sea monster", number: 22 },
-  { name: "The sea monster", number: 22 },
-];
-
 const CreatorPage = () => {
+  let navigate = useNavigate();
   const { creator } = useParams();
   const wallet = useSelector((state) => state.blockchain.value);
 
@@ -49,15 +44,21 @@ const CreatorPage = () => {
         artistsContract.abi,
         provider
       );
-      const userProfile = await artists_contract.getUserProfile(creator);
-      const _metadata = await axios.get(
-        userProfile[1].replace("ipfs://", IPFS_GATEWAY)
-      );
 
-      setProfile({
-        username: _metadata.data.username,
-        imageUri: _metadata.data.imageUri.replace("ipfs://", IPFS_GATEWAY),
-      });
+      const _hasProfile = await artists_contract.hasProfile(wallet.account);
+      if (_hasProfile) {
+        const userProfile = await artists_contract.getUserProfile(creator);
+        const _metadata = await axios.get(
+          userProfile[1].replace("ipfs://", IPFS_GATEWAY)
+        );
+
+        setProfile({
+          username: _metadata.data.username,
+          imageUri: _metadata.data.imageUri.replace("ipfs://", IPFS_GATEWAY),
+        });
+      } else {
+        navigate("/register");
+      }
     }
   };
 
@@ -81,14 +82,11 @@ const CreatorPage = () => {
           const _metadata = await axios.get(
             tokenUri.replace("ipfs://", IPFS_GATEWAY)
           );
-          if (_metadata.data.creator == creator) {
+          if (_metadata.data.creator === creator) {
             return {
-              id: Number(token.id),
               tokenId: Number(token.id),
               name: _metadata.data.name,
-              description: _metadata.data.description,
               uri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
-              price: 0,
               path: "/nft-page",
             };
           }
@@ -110,23 +108,30 @@ const CreatorPage = () => {
   }, []);
 
   return (
-    <>
-      <div className="profile">
-        <div className="profile-top">
-          <div className="profile-banner">
-            <img src={images.banner} alt="banner" />
-          </div>
-          <div className="profile-pic">
-            <img src={profile.imageUri} alt="profile" />
-            <h3>{profile.username}</h3>
-          </div>
+    <div className="profile">
+      <div className="profile-top">
+        <div className="profile-banner">
+          <img src={images.profile_banner} alt="banner" />
         </div>
-        <div className="listing-container">
-          <Listing items={nfts.slice(displayed.from, displayed.to)} />
+        <div className="profile-pic">
+          <img src={profile.imageUri} alt="profile" />
+          <h3>{profile.username}</h3>
         </div>
-        <Paginator itemsLength={nfts.length} setShownItems={setDisplayed} />
       </div>
-    </>
+
+      <div className="listing-container">
+        {nfts.length !== 0 ? (
+          <>
+            <Listing1 items={nfts.slice(displayed.from, displayed.to)} />
+            <Paginator itemsLength={nfts.length} setShownItems={setDisplayed} />
+          </>
+        ) : (
+          <div className="listing-text">
+            <p>No item created yet</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
