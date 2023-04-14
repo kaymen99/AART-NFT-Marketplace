@@ -18,7 +18,7 @@ import {
   networkDeployedTo,
 } from "../utils/contracts-config";
 import networksMap from "../utils/networksMap.json";
-import { approveERC20, swap } from "../utils/exchange-utils";
+import { approveERC20 } from "../utils/exchange-utils";
 import { getTokenAddress, tokens } from "../utils/tokens-utils";
 
 const SalePage = () => {
@@ -98,19 +98,6 @@ const SalePage = () => {
 
       try {
         setLoading(true);
-        if (paymentToken !== saleInfo.paymentToken) {
-          try {
-            await swap(
-              paymentToken,
-              saleInfo.paymentToken,
-              signer,
-              saleInfo.amount
-            );
-          } catch (error) {
-            window.alert("An error has occured, try again");
-            console.log(error);
-          }
-        }
         if (saleInfo.paymentToken !== 0) {
           await approveERC20(
             signer,
