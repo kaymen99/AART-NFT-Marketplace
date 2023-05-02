@@ -1,10 +1,10 @@
 import "./../assets/styles/pages/registerPage.css";
 import React, { useState, useEffect } from "react";
 import { CircularProgress } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { ethers } from "ethers";
 import axios from "axios";
-
 import { saveContent, IPFS_GATEWAY } from "../utils/ipfsStorage";
 import artistsContract from "../artifacts/AARTArtists.sol/AARTArtists.json";
 import {
@@ -15,6 +15,7 @@ import networksMap from "../utils/networksMap.json";
 import images from "../assets/images";
 
 const RegisterPage = () => {
+  let navigate = useNavigate();
   const wallet = useSelector((state) => state.blockchain.value);
 
   const [loading, setLoading] = useState(false);
@@ -116,11 +117,16 @@ const RegisterPage = () => {
         await register_tx.wait();
 
         setLoading(false);
+        navigate("/");
       } catch (error) {
         setLoading(false);
         console.log(error);
         window.alert("An error has occured, please try again");
       }
+    } else {
+      window.alert(
+        `Please connect with Metamask to ${networksMap[networkDeployedTo]} network`
+      );
     }
   };
 
@@ -195,6 +201,10 @@ const RegisterPage = () => {
         console.log(error);
         window.alert("An error has occured, please try again");
       }
+    } else {
+      window.alert(
+        `Please connect with Metamask to ${networksMap[networkDeployedTo]} network`
+      );
     }
   };
 
@@ -225,14 +235,16 @@ const RegisterPage = () => {
         console.log(error);
         window.alert("An error has occured, please try again");
       }
+    } else {
+      window.alert(
+        `Please connect with Metamask to ${networksMap[networkDeployedTo]} network`
+      );
     }
   };
 
   useEffect(() => {
     const get = async () => {
-      if (window.ethereum !== undefined) {
-        await getUserProfile();
-      }
+      await getUserProfile();
     };
     get();
   }, []);
