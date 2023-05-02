@@ -52,7 +52,19 @@ const Dashboard = () => {
       );
 
       const ownedNfts = await nft_contract.getUserNfts(wallet.account);
-      setUserNftsList(ownedNfts);
+      const _userNfts = await Promise.all(
+        ownedNfts.map(async (token) => {
+          const _metadata = await axios.get(
+            token.uri.replace("ipfs://", IPFS_GATEWAY)
+          );
+          return {
+            tokenId: Number(token.id),
+            name: _metadata.data.name,
+            uri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
+          };
+        })
+      );
+      setUserNftsList(_userNfts);
 
       const nftsInSale = (await market_contract.getListings()).filter(
         (s) => s[0] === wallet.account
@@ -109,17 +121,15 @@ const Dashboard = () => {
               tokenId: Number(token.id),
               name: _metadata.data.name,
               uri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
-              path: "/nft-page",
             };
           }
         })
       );
-
       setCreatedNftsList(items);
     }
   };
 
-  useEffect(async () => {
+  useEffect(() => {
     const get = async () => {
       if (window.ethereum !== undefined) {
         await getUserTokens();
@@ -134,51 +144,75 @@ const Dashboard = () => {
       <div className="dashboard">
         <h1 className="dashboard-title">Your Dashboard</h1>
         <div className="dashboard-container">
-          <Tabs forceRenderTabPanel defaultIndex={1}>
+          <Tabs forceRenderTabPanel defaultIndex={0}>
             <TabList>
               <Tab>My Nfts</Tab>
               <Tab>In sale</Tab>
               <Tab>Created</Tab>
             </TabList>
             <TabPanel>
-              <Listing1
-                items={userNftsList.slice(
-                  displayedUserNfts.from,
-                  displayedUserNfts.to
-                )}
-              />
-              <Paginator
-                itemsLength={userNftsList.length}
-                setShownItems={setDisplayedUserNfts}
-              />
+              {userNftsList.length !== 0 ? (
+                <>
+                  <Listing1
+                    items={userNftsList.slice(
+                      displayedUserNfts.from,
+                      displayedUserNfts.to
+                    )}
+                  />
+                  <Paginator
+                    itemsLength={userNftsList.length}
+                    setShownItems={setDisplayedUserNfts}
+                  />
+                </>
+              ) : (
+                <div className="listing-text">
+                  <p>You don't own AART tokens</p>
+                </div>
+              )}
             </TabPanel>
             <TabPanel>
-              <div className="dashboard-items">
-                <Listing
-                  items={inSaleList.slice(
-                    displayedInSale.from,
-                    displayedInSale.to
-                  )}
-                />
-              </div>
-              <Paginator
-                itemsLength={inSaleList.length}
-                setShownItems={setDisplayedInSale}
-              />
+              {inSaleList.length !== 0 ? (
+                <>
+                  <div className="dashboard-items">
+                    <Listing
+                      items={inSaleList.slice(
+                        displayedInSale.from,
+                        displayedInSale.to
+                      )}
+                    />
+                  </div>
+                  <Paginator
+                    itemsLength={inSaleList.length}
+                    setShownItems={setDisplayedInSale}
+                  />
+                </>
+              ) : (
+                <div className="listing-text">
+                  <p>No item in sale yet</p>
+                </div>
+              )}
             </TabPanel>
             <TabPanel>
-              <div className="dashboard-items">
-                <Listing1
-                  items={createdNftsList.slice(
-                    displayedCreatedNfts.from,
-                    displayedCreatedNfts.to
-                  )}
-                />
-              </div>
-              <Paginator
-                itemsLength={createdNftsList.length}
-                setShownItems={setDisplayedCreatedNfts}
-              />
+              {createdNftsList.length !== 0 ? (
+                <>
+                  <div className="dashboard-items">
+                    <Listing1
+                      items={createdNftsList.slice(
+                        displayedCreatedNfts.from,
+                        displayedCreatedNfts.to
+                      )}
+                    />
+                  </div>
+                  <Paginator
+                    itemsLength={createdNftsList.length}
+                    setShownItems={setDisplayedCreatedNfts}
+                  />
+                </>
+              ) : (
+                <div className="listing-text">
+                  <p>You didn't create any NFT yet</p>
+                </div>
+              )}
             </TabPanel>
           </Tabs>
         </div>
