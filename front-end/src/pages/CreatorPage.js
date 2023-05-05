@@ -45,13 +45,12 @@ const CreatorPage = () => {
         provider
       );
 
-      const _hasProfile = await artists_contract.hasProfile(wallet.account);
+      const _hasProfile = await artists_contract.hasProfile(creator);
       if (_hasProfile) {
         const userProfile = await artists_contract.getUserProfile(creator);
         const _metadata = await axios.get(
           userProfile[1].replace("ipfs://", IPFS_GATEWAY)
         );
-
         setProfile({
           username: _metadata.data.username,
           imageUri: _metadata.data.imageUri.replace("ipfs://", IPFS_GATEWAY),
@@ -75,7 +74,6 @@ const CreatorPage = () => {
       );
 
       const nftsList = await nft_contract.getAllNfts();
-
       const items = await Promise.all(
         nftsList.map(async (token) => {
           const tokenUri = token.uri;
@@ -87,7 +85,6 @@ const CreatorPage = () => {
               tokenId: Number(token.id),
               name: _metadata.data.name,
               uri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
-              path: "/nft-page",
             };
           }
         })
