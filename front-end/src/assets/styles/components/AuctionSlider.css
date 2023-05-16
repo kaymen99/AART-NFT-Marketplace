@@ -1,8 +1,7 @@
 .auction-slider-box {
   margin: 0 auto;
   width: 1000px;
-  padding-block: 2rem;
-
+  padding: 2rem;
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   align-items: center;
@@ -12,9 +11,9 @@
   grid-row: 1 / -1;
   background-color: #2a2d3a;
   border-radius: 1rem;
-  padding: 1.6rem;
+  padding: 1rem;
   z-index: 1111;
-  height: 85vh;
+  height: 78vh;
 }
 
 .auction-slider-box-left h2 {
@@ -80,8 +79,8 @@
 
 .auction-slider-bidding-box {
   border: 3px solid #fff;
-  margin-block: 2rem;
-  padding: 0 4rem;
+  margin-block: 1.6rem;
+  padding: 0 1rem;
   border-radius: 0.5rem;
 }
 
@@ -137,7 +136,6 @@
 .auction-slider-button-icon:hover {
   background-color: #e32970;
   border-radius: 50%;
-  padding: 1rem;
 }
 
 .auction-slider_box_right_box {
@@ -153,32 +151,40 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
+  gap: 1.5rem;
   padding-top: 1rem;
-  margin-left: 2rem;
+  margin-left: 1rem;
 }
 
-@media screen and (max-width: 1050px) {
+@media screen and (max-width: 1150px) {
   .auction-slider-box {
     width: 800px;
   }
+  .auction_slider_box_right_box_img {
+    height: 85vh;
+  }
 }
 
-@media screen and (max-width: 850px) {
+@media screen and (max-width: 880px) {
   .auction-slider-box {
-    width: 800px;
-    padding-top: 38rem;
-    grid-template-columns: 1fr;
-    gap: 1rem;
+    display: flex;
+    flex-direction: column-reverse;
+    width: 100%;
   }
 
   .auction-slider-box-left {
-    height: 90vh;
-    padding: 1.5rem;
+    padding: 1.8rem;
+    width: 450px;
   }
 
   .auction-slider-box-right {
-    margin-top: -70rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  .auction_slider_box_right_box_img {
+    border-radius: 2rem;
+    height: 80vh;
   }
 
   .auction-slider-seller {
@@ -208,12 +214,18 @@
   .auction-slider-timer-item p {
     font-size: 1rem;
   }
+}
 
+@media screen and (max-width: 490px) {
+  .auction-slider-box-left {
+    margin: 0;
+    padding: 2rem;
+    height: 90vh;
+    width: 100%;
+  }
   .auction_slider_box_right_box_img {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 2rem;
-    height: 75vh;
+    height: 65vh;
+    width: 90%;
+    margin-left: 5%;
   }
 }
