@@ -5,7 +5,7 @@ import { combineReducers } from "redux";
 import reportWebVitals from "./reportWebVitals";
 import { configureStore } from "@reduxjs/toolkit";
 import { Provider } from "react-redux";
-import blockchainReducer from "./features/blockchain";
+import userDataReducer from "./features/userData";
 import {
   persistStore,
   persistReducer,
@@ -27,7 +27,7 @@ const persistConfig = {
 };
 
 const rootReducer = combineReducers({
-  blockchain: blockchainReducer,
+  userData: userDataReducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
