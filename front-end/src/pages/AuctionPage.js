@@ -1,5 +1,4 @@
 import "./../assets/styles/pages/auctionPage.css";
-import images from "../assets/images";
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
@@ -9,36 +8,55 @@ import { ethers } from "ethers";
 import moment from "moment";
 import axios from "axios";
 import { AiOutlineClose } from "react-icons/ai";
-
+import { CircularProgress } from "@mui/material";
 import marketContract from "../artifacts/AARTMarket.sol/AARTMarket.json";
 import nftContract from "../artifacts/AARTCollection.sol/AARTCollection.json";
+import artistsContract from "../artifacts/AARTArtists.sol/AARTArtists.json";
 import {
   marketContractAddress,
+  artistsContractAddress,
   nftContractAddress,
   networkDeployedTo,
 } from "../utils/contracts-config";
 import networksMap from "../utils/networksMap.json";
 import { IPFS_GATEWAY } from "../utils/ipfsStorage";
-import { approveERC20, swap } from "../utils/exchange-utils";
-import { getTokenAddress, tokens } from "../utils/tokens-utils";
+import { approveERC20 } from "../utils/exchange-utils";
+import {
+  MATIC,
+  tokens,
+  formatTokenAmount,
+  getTokenFromAddress,
+  parseTokenAmount,
+} from "../utils/tokens-utils";
 
 const AuctionPage = () => {
   const { id } = useParams();
-  const wallet = useSelector((state) => state.blockchain.value);
+  const wallet = useSelector((state) => state.userData.value);
+  const [loading, setLoading] = useState(false);
 
   const [show, setShow] = useState(false);
   const handleClose = () => setShow(false);
   const handleShow = () => setShow(true);
 
+  const auctionStatus = {
+    0: "Open",
+    1: "Closed",
+    2: "Ended",
+    3: "DirectBuy",
+    4: "Canceled",
+  };
+
   const [auctionInfo, setAuctionInfo] = useState({
     tokenId: 0,
+    ownerInfo: "",
+    ownerAddress: "",
+    creatorInfo: "",
+    creatorAddress: "",
     name: "",
     description: "",
     imageUri: "",
-    creator: "",
     category: "",
-    seller: "",
-    paymentToken: "MATIC",
+    paymentToken: MATIC,
     highestBid: 0,
     highestBidder: "",
     startPrice: 0,
@@ -46,11 +64,12 @@ const AuctionPage = () => {
     startTime: "",
     endTime: "",
     started: false,
+    status: 1,
   });
 
   const [biddingParams, setBiddingParams] = useState({
     bidAmount: 0,
-    paymentToken: auctionInfo.paymentToken,
+    paymentToken: MATIC,
   });
 
   const getAuctionDetails = async () => {
@@ -72,37 +91,95 @@ const AuctionPage = () => {
 
       const auction = (await market_contract.getAuctions())[Number(id)];
       const tokenId = Number(auction[0]);
+      const startTime = Number(auction[4]);
+
+      const status = Number(await market_contract.getAuctionStatus(Number(id)));
 
       const tokenUri = await nft_contract.tokenURI(tokenId);
       const _metadata = await axios.get(
         tokenUri.replace("ipfs://", IPFS_GATEWAY)
       );
-      const startTime = Number(auction[7]);
 
-      const userBidAmount = await market_contract.getUserBidAmount(
+      const _ownerInfo = await getUserProfile(auction[1]);
+      const _creatorInfo = await getUserProfile(_metadata.data.creator);
+
+      let userBidAmount = await market_contract.getUserBidAmount(
         Number(id),
         wallet.account
+      );
+      userBidAmount = formatTokenAmount(
+        wallet.network,
+        auction[2],
+        userBidAmount
+      );
+      const highestBid = formatTokenAmount(
+        wallet.network,
+        auction[2],
+        auction[6]
+      );
+      const directPrice = formatTokenAmount(
+        wallet.network,
+        auction[2],
+        auction[7]
+      );
+      const startPrice = formatTokenAmount(
+        wallet.network,
+        auction[2],
+        auction[8]
       );
 
       setAuctionInfo({
         tokenId: tokenId,
+        ownerInfo: _ownerInfo,
+        ownerAddress: auction[1],
+        creatorInfo: _creatorInfo,
+        creatorAddress: _metadata.data.creator,
         name: _metadata.data.name,
         description: _metadata.data.description,
         imageUri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
-        creator: _metadata.data.creator,
         category: _metadata.data.category,
-        seller: auction[1],
         paymentToken: auction[2],
         highestBidder: auction[3],
-        highestBid: auction[4],
-        directPrice: Number(auction[5]),
-        startPrice: Number(auction[6]),
+        highestBid: highestBid,
+        directPrice: directPrice,
+        startPrice: startPrice,
         startTime: startTime,
-        endTime: Number(auction[8]),
-        started: startTime >= new Date().getTime(),
+        endTime: Number(auction[5]),
+        status: auctionStatus[status],
       });
-
       setBiddingParams({ ...biddingParams, bidAmount: userBidAmount });
+    }
+  };
+
+  const getUserProfile = async (user) => {
+    if (wallet.network === networksMap[networkDeployedTo]) {
+      const provider = new ethers.providers.Web3Provider(
+        window.ethereum,
+        "any"
+      );
+      const artists_contract = new ethers.Contract(
+        artistsContractAddress,
+        artistsContract.abi,
+        provider
+      );
+
+      const hasProfile = await artists_contract.hasProfile(user);
+      if (hasProfile) {
+        const userProfile = await artists_contract.getUserProfile(user);
+
+        const _metadata = await axios.get(
+          userProfile[1].replace("ipfs://", IPFS_GATEWAY)
+        );
+
+        return {
+          username: _metadata.data.username,
+          imageUri: _metadata.data.imageUri.replace("ipfs://", IPFS_GATEWAY),
+        };
+      }
+      return {
+        username: "username",
+        imageUri: "",
+      };
     }
   };
 
@@ -113,40 +190,38 @@ const AuctionPage = () => {
         "any"
       );
       const signer = provider.getSigner();
-
       const market_contract = new ethers.Contract(
         marketContractAddress,
         marketContract.abi,
         signer
       );
-
-      if (biddingParams.paymentToken !== auctionInfo.paymentToken) {
-        try {
-          await swap(
-            biddingParams.paymentToken,
-            auctionInfo.paymentToken,
+      const price = parseTokenAmount(
+        wallet.network,
+        auctionInfo.paymentToken,
+        biddingParams.bidAmount
+      );
+      try {
+        setLoading(true);
+        if (auctionInfo.paymentToken !== MATIC) {
+          await approveERC20(
             signer,
-            biddingParams.bidAmount
+            auctionInfo.paymentToken,
+            marketContractAddress,
+            price
           );
-        } catch (error) {
-          window.alert("An error has occured, try again");
-          console.log(error);
+          const bid_tx = await market_contract.bid(Number(id), price);
+          await bid_tx.wait();
+        } else {
+          const bid_tx = await market_contract.bid(Number(id), price, {
+            value: price,
+          });
+          await bid_tx.wait();
         }
-      }
-      if (auctionInfo.paymentToken !== 0) {
-        await approveERC20(
-          signer,
-          getTokenAddress(auctionInfo.paymentToken),
-          marketContractAddress,
-          auctionInfo.amount
-        );
-        const bid_tx = await market_contract.bid(Number(id));
-        await bid_tx.wait();
-      } else {
-        const bid_tx = await market_contract.bid(Number(id), {
-          value: auctionInfo.amount,
-        });
-        await bid_tx.wait();
+        setLoading(false);
+        await getAuctionDetails();
+      } catch (err) {
+        setLoading(false);
+        console.log(err);
       }
     }
   };
@@ -158,26 +233,38 @@ const AuctionPage = () => {
         "any"
       );
       const signer = provider.getSigner();
-
       const market_contract = new ethers.Contract(
         marketContractAddress,
         marketContract.abi,
         signer
       );
-      if (auctionInfo.paymentToken !== 0) {
-        await approveERC20(
-          signer,
-          getTokenAddress(auctionInfo.paymentToken),
-          marketContractAddress,
-          auctionInfo.directPrice
-        );
-        const buy_tx = await market_contract.directBuyAuction(Number(id));
-        await buy_tx.wait();
-      } else {
-        const buy_tx = await market_contract.directBuyAuction(Number(id), {
-          value: auctionInfo.directPrice,
-        });
-        await buy_tx.wait();
+      const price = parseTokenAmount(
+        wallet.network,
+        auctionInfo.paymentToken,
+        auctionInfo.directPrice
+      );
+      try {
+        setLoading(true);
+        if (auctionInfo.paymentToken !== MATIC) {
+          await approveERC20(
+            signer,
+            auctionInfo.paymentToken,
+            marketContractAddress,
+            price
+          );
+          const buy_tx = await market_contract.directBuyAuction(Number(id));
+          await buy_tx.wait();
+        } else {
+          const buy_tx = await market_contract.directBuyAuction(Number(id), {
+            value: price,
+          });
+          await buy_tx.wait();
+        }
+        setLoading(false);
+        await getAuctionDetails();
+      } catch (err) {
+        setLoading(false);
+        console.log(err);
       }
     }
   };
@@ -189,15 +276,21 @@ const AuctionPage = () => {
         "any"
       );
       const signer = provider.getSigner();
-
       const market_contract = new ethers.Contract(
         marketContractAddress,
         marketContract.abi,
         signer
       );
 
-      const withdraw_tx = await market_contract.withdrawBid(Number(id));
-      await withdraw_tx.wait();
+      try {
+        setLoading(true);
+        const withdraw_tx = await market_contract.withdrawBid(Number(id));
+        await withdraw_tx.wait();
+        setLoading(false);
+      } catch (err) {
+        setLoading(false);
+        console.log(err);
+      }
     }
   };
 
@@ -208,15 +301,21 @@ const AuctionPage = () => {
         "any"
       );
       const signer = provider.getSigner();
-
       const market_contract = new ethers.Contract(
         marketContractAddress,
         marketContract.abi,
         signer
       );
 
-      const end_tx = await market_contract.endAuction(Number(id));
-      await end_tx.wait();
+      try {
+        setLoading(true);
+        const end_tx = await market_contract.endAuction(Number(id));
+        await end_tx.wait();
+        setLoading(false);
+      } catch (err) {
+        setLoading(false);
+        console.log(err);
+      }
     }
   };
 
@@ -227,7 +326,6 @@ const AuctionPage = () => {
         "any"
       );
       const signer = provider.getSigner();
-
       const market_contract = new ethers.Contract(
         marketContractAddress,
         marketContract.abi,
@@ -260,13 +358,13 @@ const AuctionPage = () => {
             <div className="item-seller-creator-profile">
               <img
                 className="item-seller-creator-img"
-                src={images.user}
+                src={auctionInfo.ownerInfo.imageUri}
                 alt="profile image"
               />
               <div className="item-seller-creator-info">
-                <p>Creator</p>
+                <p>Owner</p>
                 <br />
-                <h4>Rian Leon </h4>
+                <h4>{auctionInfo.ownerInfo.username}</h4>
               </div>
             </div>
             <div
@@ -275,13 +373,15 @@ const AuctionPage = () => {
             >
               <img
                 className="item-seller-creator-img"
-                src={images.user}
+                src={auctionInfo.creatorInfo.imageUri}
                 alt="profile image"
               />
               <div className="item-seller-creator-info">
-                <p>Owner</p>
+                <p>Creator</p>
                 <br />
-                <h4>Rian Leon </h4>
+                <a href={`/creator-profile/${auctionInfo.creatorAddress}`}>
+                  <h4>{auctionInfo.creatorInfo.username}</h4>
+                </a>
               </div>
             </div>
           </div>
@@ -291,7 +391,7 @@ const AuctionPage = () => {
           <div className="auction-bid-info">
             <Table responsive style={{ color: "white" }}>
               <tbody>
-                {auctionInfo.started ? (
+                {auctionInfo.status === "Open" ? (
                   <>
                     <tr>
                       <td className="p-2">Ends in</td>
@@ -301,20 +401,62 @@ const AuctionPage = () => {
                           .format("MMM D, HH:mmA")}
                       </td>
                     </tr>
+                    {auctionInfo.highestBidder === MATIC ? (
+                      <tr>
+                        <td className="p-2">Start price</td>
+                        <td>
+                          {auctionInfo.startPrice}{" "}
+                          {
+                            getTokenFromAddress(
+                              wallet.network,
+                              auctionInfo.paymentToken
+                            ).symbol
+                          }
+                        </td>
+                      </tr>
+                    ) : null}
+                    <tr>
+                      <td className="p-2">Direct Buy price</td>
+                      <td>
+                        {auctionInfo.directPrice}{" "}
+                        {
+                          getTokenFromAddress(
+                            wallet.network,
+                            auctionInfo.paymentToken
+                          ).symbol
+                        }
+                      </td>
+                    </tr>
                     <tr>
                       <td className="p-2">Highest Bid</td>
                       {auctionInfo.highestBidder === wallet.account ? (
                         <td>You have highest bid</td>
                       ) : (
-                        <td>1000 ETH</td>
+                        <td>
+                          {auctionInfo.highestBid}{" "}
+                          {
+                            getTokenFromAddress(
+                              wallet.network,
+                              auctionInfo.paymentToken
+                            ).symbol
+                          }
+                        </td>
                       )}
                     </tr>
                     <tr>
                       <td className="p-2">Your Bid</td>
-                      <td>450 ETH</td>
+                      <td>
+                        {auctionInfo.highestBid}{" "}
+                        {
+                          getTokenFromAddress(
+                            wallet.network,
+                            auctionInfo.paymentToken
+                          ).symbol
+                        }
+                      </td>
                     </tr>
                   </>
-                ) : (
+                ) : auctionInfo.status === "Closed" ? (
                   <>
                     <tr>
                       <td className="p-2">Starts in</td>
@@ -334,40 +476,143 @@ const AuctionPage = () => {
                     </tr>
                     <tr>
                       <td className="p-2">Start price</td>
-                      <td>{auctionInfo.startPrice}</td>
+                      <td>
+                        {auctionInfo.startPrice}{" "}
+                        {
+                          getTokenFromAddress(
+                            wallet.network,
+                            auctionInfo.paymentToken
+                          ).symbol
+                        }
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-2">Direct Buy price</td>
+                      <td>
+                        {auctionInfo.directPrice}{" "}
+                        {
+                          getTokenFromAddress(
+                            wallet.network,
+                            auctionInfo.paymentToken
+                          ).symbol
+                        }
+                      </td>
                     </tr>
                   </>
-                )}
+                ) : auctionInfo.status === "Ended" ? (
+                  <>
+                    <tr>
+                      <td className="p-2">Started in</td>
+                      <td>
+                        {moment
+                          .unix(auctionInfo.startTime)
+                          .format("MMM D, HH:mmA")}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-2">Ends in</td>
+                      <td>
+                        {moment
+                          .unix(auctionInfo.endTime)
+                          .format("MMM D, HH:mmA")}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-2">Start price</td>
+                      <td>
+                        {auctionInfo.startPrice}{" "}
+                        {
+                          getTokenFromAddress(
+                            wallet.network,
+                            auctionInfo.paymentToken
+                          ).symbol
+                        }
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-2">Direct Buy price</td>
+                      <td>
+                        {auctionInfo.directPrice}{" "}
+                        {
+                          getTokenFromAddress(
+                            wallet.network,
+                            auctionInfo.paymentToken
+                          ).symbol
+                        }
+                      </td>
+                    </tr>
+                  </>
+                ) : null}
               </tbody>
             </Table>
           </div>
           <div className="auction-content-buy">
-            {wallet.account !== auctionInfo.seller ? (
-              auctionInfo.started ? (
-                wallet.account !== auctionInfo.highestBidder ? (
-                  <>
-                    <button type="submit" onClick={handleShow}>
-                      Make bid
-                    </button>
-                    <button type="submit" onClick={directBuy}>
-                      Buy Directly
-                    </button>
-                  </>
-                ) : (
-                  <button type="submit" onClick={directBuy}>
-                    Buy Directly
-                  </button>
-                )
+            {wallet.account === auctionInfo.ownerAddress ? (
+              auctionInfo.status === "Ended" ? (
+                <button type="submit" onClick={endAuction}>
+                  {loading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    "End Auction"
+                  )}
+                </button>
+              ) : auctionInfo.status === "Closed" ? (
+                <button type="submit" onClick={cancelAuction}>
+                  {loading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    "Cancel"
+                  )}
+                </button>
               ) : null
-            ) : auctionInfo.started ? (
-              <button type="submit" onClick={cancelAuction}>
-                Cancel
-              </button>
-            ) : (
-              <button type="submit" onClick={endAuction}>
-                End Auction
-              </button>
-            )}
+            ) : wallet.account === auctionInfo.highestBidder ? (
+              auctionInfo.status === "Open" ? (
+                <button type="submit" onClick={directBuy}>
+                  {loading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    "Buy Directly"
+                  )}
+                </button>
+              ) : auctionInfo.status === "DirectBuy" &&
+                biddingParams.bidAmount !== 0 ? (
+                <button type="submit" onClick={withdrawBid}>
+                  {loading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    "Withdraw Bid"
+                  )}
+                </button>
+              ) : null
+            ) : wallet.account !== auctionInfo.highestBidder ? (
+              auctionInfo.status === "Open" ? (
+                <>
+                  <button type="submit" onClick={handleShow}>
+                    {loading ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      "Make bid"
+                    )}
+                  </button>
+                  <button type="submit" onClick={directBuy}>
+                    {loading ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      "Buy Directly"
+                    )}
+                  </button>
+                </>
+              ) : auctionInfo.status === "DirectBuy" &&
+                biddingParams.bidAmount !== 0 ? (
+                <button type="submit" onClick={withdrawBid}>
+                  {loading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    "Withdraw Bid"
+                  )}
+                </button>
+              ) : null
+            ) : null}
           </div>
         </div>
       </div>
@@ -420,11 +665,15 @@ const AuctionPage = () => {
         <Modal.Footer>
           {biddingParams.bidAmount !== 0 ? (
             <button type="submit" onClick={withdrawBid}>
-              Withdraw
+              {loading ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                "Withdraw"
+              )}
             </button>
           ) : null}
           <button type="submit" onClick={bid}>
-            Bid
+            {loading ? <CircularProgress size={18} color="inherit" /> : "Bid"}
           </button>
         </Modal.Footer>
       </Modal>
