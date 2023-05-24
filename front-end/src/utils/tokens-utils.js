@@ -1,4 +1,9 @@
+import { ethers } from "ethers";
+import { mockDAIAddress } from "./contracts-config";
 import images from "../assets/images";
+
+// matic is native coin on the polygon chains
+const MATIC = ethers.constants.AddressZero;
 
 const tokens = {
   "Polygon Mainnet": [
@@ -6,7 +11,7 @@ const tokens = {
       index: 0,
       symbol: "MATIC",
       logo: images.matic,
-      address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+      address: MATIC,
       decimals: 18,
     },
     {
@@ -36,7 +41,7 @@ const tokens = {
       index: 0,
       symbol: "MATIC",
       logo: images.matic,
-      address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+      address: MATIC,
       decimals: 18,
     },
     {
@@ -61,16 +66,43 @@ const tokens = {
       decimals: 6,
     },
   ],
+  Ganache: [
+    {
+      index: 0,
+      symbol: "MATIC",
+      logo: images.matic,
+      address: MATIC,
+      decimals: 18,
+    },
+    {
+      index: 1,
+      symbol: "mDAI", // mock DAI
+      logo: images.dai,
+      address: mockDAIAddress,
+      decimals: 18,
+    },
+  ],
 };
 
-function getTokenFromAddress(tokenAddress, network) {
-  const token = tokens[network].filter((t) => t.address === tokenAddress);
-
-  return token.index;
+function getTokenFromAddress(network, address) {
+  const token = tokens[network].filter((t) => t.address === address);
+  return token[0];
 }
 
-function getTokenAddress(index, network) {
-  return tokens[network][index].address;
+function parseTokenAmount(network, address, amount) {
+  const token = tokens[network].filter((t) => t.address === address);
+  return String(amount * 10 ** token[0].decimals);
 }
 
-export { tokens, getTokenAddress, getTokenFromAddress };
+function formatTokenAmount(network, address, amount) {
+  const token = tokens[network].filter((t) => t.address === address);
+  return Number(amount) / 10 ** token[0].decimals;
+}
+
+export {
+  MATIC,
+  tokens,
+  getTokenFromAddress,
+  parseTokenAmount,
+  formatTokenAmount,
+};
