@@ -8,17 +8,19 @@ import { Tab, Tabs, TabList, TabPanel } from "react-tabs";
 import axios from "axios";
 import { IPFS_GATEWAY } from "../utils/ipfsStorage";
 import marketContract from "../artifacts/AARTMarket.sol/AARTMarket.json";
+import artistsContract from "../artifacts/AARTArtists.sol/AARTArtists.json";
 import nftContract from "../artifacts/AARTCollection.sol/AARTCollection.json";
 import {
   marketContractAddress,
   nftContractAddress,
+  artistsContractAddress,
   networkDeployedTo,
 } from "../utils/contracts-config";
 import networksMap from "../utils/networksMap.json";
 import { Listing1, Listing, Paginator } from "../components";
 
 const Dashboard = () => {
-  const wallet = useSelector((state) => state.blockchain.value);
+  const wallet = useSelector((state) => state.userData.value);
   const [userNftsList, setUserNftsList] = useState([]);
   const [inSaleList, setInSaleList] = useState([]);
   const [createdNftsList, setCreatedNftsList] = useState([]);
@@ -44,7 +46,6 @@ const Dashboard = () => {
         marketContract.abi,
         provider
       );
-
       const nft_contract = new ethers.Contract(
         nftContractAddress,
         nftContract.abi,
@@ -107,25 +108,27 @@ const Dashboard = () => {
         nftContract.abi,
         provider
       );
-
-      const nftsList = await nft_contract.getAllNfts();
-
-      const items = await Promise.all(
-        nftsList.map(async (token) => {
-          const tokenUri = token.uri;
-          const _metadata = await axios.get(
-            tokenUri.replace("ipfs://", IPFS_GATEWAY)
-          );
-          if (_metadata.data.creator === wallet.account) {
-            return {
-              tokenId: Number(token.id),
-              name: _metadata.data.name,
-              uri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
-            };
-          }
-        })
-      );
-      setCreatedNftsList(items);
+      if (wallet.registred) {
+        const nftsList = await nft_contract.getAllNfts();
+        const items = await Promise.all(
+          nftsList.map(async (token) => {
+            const tokenUri = token.uri;
+            const _metadata = await axios.get(
+              tokenUri.replace("ipfs://", IPFS_GATEWAY)
+            );
+            if (_metadata.data.creator === wallet.account) {
+              return {
+                tokenId: Number(token.id),
+                name: _metadata.data.name,
+                uri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
+              };
+            }
+          })
+        );
+        setCreatedNftsList(items);
+      } else {
+        setCreatedNftsList([]);
+      }
     }
   };
 
@@ -137,7 +140,7 @@ const Dashboard = () => {
       }
     };
     get();
-  }, []);
+  }, [wallet.account]);
 
   return (
     <div className="section__padding">
