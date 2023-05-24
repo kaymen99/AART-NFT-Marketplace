@@ -56,7 +56,9 @@ function Hero() {
                     type specimen book.
                   </p>
                   <div>
-                    <Button btnName="Discover" />
+                    <Link to="/collection">
+                      <Button btnName="Discover" />
+                    </Link>
                   </div>
                 </div>
               )}
