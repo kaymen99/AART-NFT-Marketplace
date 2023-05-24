@@ -27,7 +27,7 @@ async function moveTimeTo(target) {
 
 async function deployERC20Mock() {
   const Mock = await hre.ethers.getContractFactory("ERC20Mock");
-  const mockContract = await Mock.deploy();
+  const mockContract = await Mock.deploy(18);
   await mockContract.deployed();
 
   return mockContract;
