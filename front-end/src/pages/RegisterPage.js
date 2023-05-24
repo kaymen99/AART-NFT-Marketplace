@@ -1,4 +1,4 @@
-import "./../assets/styles/pages/registerPage.css";
+import "../assets/styles/pages/registerPage.css";
 import React, { useState, useEffect } from "react";
 import { CircularProgress } from "@mui/material";
 import { useNavigate } from "react-router-dom";
@@ -16,12 +16,13 @@ import images from "../assets/images";
 
 const RegisterPage = () => {
   let navigate = useNavigate();
-  const wallet = useSelector((state) => state.blockchain.value);
+  const wallet = useSelector((state) => state.userData.value);
 
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState({
     name: "",
     image: null,
+    edited: false,
   });
   const [formInput, setFormInput] = useState({
     username: "",
@@ -32,7 +33,8 @@ const RegisterPage = () => {
     tokenId: 0,
     username: "",
     description: "",
-    imageUri: "",
+    imageUri:
+      "https://thumbs.dreamstime.com/b/profile-icon-black-background-graphic-web-design-modern-simple-vector-sign-internet-concept-trendy-symbol-profile-138113075.jpg",
     hasProfile: false,
   });
 
@@ -43,11 +45,13 @@ const RegisterPage = () => {
     setImage({
       name: file.name,
       image: file,
+      edited: true,
     });
   };
 
   const getUserProfile = async () => {
     if (wallet.network === networksMap[networkDeployedTo]) {
+      reset();
       const provider = new ethers.providers.Web3Provider(
         window.ethereum,
         "any"
@@ -63,7 +67,6 @@ const RegisterPage = () => {
         const userProfile = await artists_contract.getUserProfile(
           wallet.account
         );
-
         const _metadata = await axios.get(
           userProfile[1].replace("ipfs://", IPFS_GATEWAY)
         );
@@ -242,12 +245,28 @@ const RegisterPage = () => {
     }
   };
 
+  const reset = () => {
+    setImage({
+      name: "",
+      image: null,
+      edited: false,
+    });
+    setProfile({
+      tokenId: 0,
+      username: "",
+      description: "",
+      imageUri:
+        "https://thumbs.dreamstime.com/b/profile-icon-black-background-graphic-web-design-modern-simple-vector-sign-internet-concept-trendy-symbol-profile-138113075.jpg",
+      hasProfile: false,
+    });
+  };
+
   useEffect(() => {
     const get = async () => {
       await getUserProfile();
     };
     get();
-  }, []);
+  }, [wallet.account]);
 
   return (
     <>
@@ -256,11 +275,9 @@ const RegisterPage = () => {
           <div className="profile-image-box">
             <img
               src={
-                profile.imageUri !== ""
+                !image.edited
                   ? profile.imageUri
-                  : image.image !== null
-                  ? URL.createObjectURL(image.image)
-                  : images.user
+                  : URL.createObjectURL(image.image)
               }
               alt="profile"
             />
