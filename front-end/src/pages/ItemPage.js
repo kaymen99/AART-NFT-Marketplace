@@ -1,9 +1,8 @@
-import "./../assets/styles/pages/itemPage.css";
+import "../assets/styles/pages/itemPage.css";
 import "react-datepicker/dist/react-datepicker.css";
-import images from "../assets/images";
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { ethers } from "ethers";
 import axios from "axios";
@@ -15,22 +14,22 @@ import { Modal } from "react-bootstrap";
 import { IPFS_GATEWAY } from "../utils/ipfsStorage";
 import marketContract from "../artifacts/AARTMarket.sol/AARTMarket.json";
 import nftContract from "../artifacts/AARTCollection.sol/AARTCollection.json";
+import artistsContract from "../artifacts/AARTArtists.sol/AARTArtists.json";
 import {
   marketContractAddress,
+  artistsContractAddress,
   nftContractAddress,
   networkDeployedTo,
 } from "../utils/contracts-config";
 import networksMap from "../utils/networksMap.json";
 import { approveERC20, approveERC721 } from "../utils/exchange-utils";
-import {
-  getTokenAddress,
-  getTokenFromAddress,
-  tokens,
-} from "../utils/tokens-utils";
+import { MATIC, parseTokenAmount, tokens } from "../utils/tokens-utils";
+import images from "../assets/images";
 
 const ItemPage = () => {
+  let navigate = useNavigate();
   const { id } = useParams();
-  const wallet = useSelector((state) => state.blockchain.value);
+  const wallet = useSelector((state) => state.userData.value);
 
   const [modalType, setModalType] = useState("");
   const [show, setShow] = useState(false);
@@ -43,27 +42,29 @@ const ItemPage = () => {
     name: "",
     description: "",
     imageUri: "",
-    owner: "",
-    creator: "",
+    ownerInfo: "",
+    ownerAddress: "",
+    creatorInfo: "",
+    creatorAddress: "",
     category: "",
   });
 
   const [offer, setOffer] = useState({
     hasOffer: false,
     amount: 0,
-    paymentToken: "MATIC",
+    paymentToken: MATIC,
     expireAt: new Date(),
   });
 
   const [listingParams, setListingParams] = useState({
     amount: 0,
-    paymentToken: "MATIC",
+    paymentToken: MATIC,
   });
 
   const [auctionParams, setAuctionParams] = useState({
     startPrice: 0,
     directPrice: 0,
-    paymentToken: "MATIC",
+    paymentToken: MATIC,
     startTime: new Date(),
     endTime: new Date(),
   });
@@ -86,12 +87,17 @@ const ItemPage = () => {
         tokenUri.replace("ipfs://", IPFS_GATEWAY)
       );
 
+      const creator = await getUserProfile(_metadata.data.creator);
+      const owner = await getUserProfile(tokenOwner);
+
       setMetaData({
         name: _metadata.data.name,
         description: _metadata.data.description,
         imageUri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
-        creator: _metadata.data.creator,
-        owner: tokenOwner,
+        ownerInfo: owner,
+        ownerAddress: tokenOwner,
+        creatorInfo: creator,
+        creatorAddress: _metadata.data.creator,
         category: _metadata.data.category,
       });
     }
@@ -126,11 +132,43 @@ const ItemPage = () => {
         setOffer({
           hasOffer: true,
           amount: userOffers[0][1],
-          paymentToken: getTokenFromAddress(userOffers[0][2]),
+          paymentToken: userOffers[0][2],
           expireAt: Date(userOffers[0][3]),
         });
       }
       setBuyOffers(activeOffers);
+    }
+  };
+
+  const getUserProfile = async (user) => {
+    if (wallet.network === networksMap[networkDeployedTo]) {
+      const provider = new ethers.providers.Web3Provider(
+        window.ethereum,
+        "any"
+      );
+      const artists_contract = new ethers.Contract(
+        artistsContractAddress,
+        artistsContract.abi,
+        provider
+      );
+
+      const hasProfile = await artists_contract.hasProfile(user);
+      if (hasProfile) {
+        const userProfile = await artists_contract.getUserProfile(user);
+
+        const _metadata = await axios.get(
+          userProfile[1].replace("ipfs://", IPFS_GATEWAY)
+        );
+
+        return {
+          username: _metadata.data.username,
+          imageUri: _metadata.data.imageUri.replace("ipfs://", IPFS_GATEWAY),
+        };
+      }
+      return {
+        username: "Jane Doe",
+        imageUri: images.user,
+      };
     }
   };
 
@@ -148,28 +186,34 @@ const ItemPage = () => {
         signer
       );
 
-      if (offer.paymentToken !== 0) {
+      const amount = parseTokenAmount(
+        wallet.network,
+        offer.paymentToken,
+        offer.amount
+      );
+
+      if (offer.paymentToken !== MATIC) {
         await approveERC20(
           signer,
-          getTokenAddress(offer.paymentToken),
+          offer.paymentToken,
           marketContractAddress,
-          offer.amount
+          amount
         );
         const offer_tx = await market_contract.makeOffer(
           Number(id),
-          getTokenAddress(offer.paymentToken),
-          offer.amount,
+          offer.paymentToken,
+          amount,
           offer.expireAt
         );
         await offer_tx.wait();
       } else {
         const offer_tx = await market_contract.makeOffer(
           Number(id),
-          getTokenAddress(offer.paymentToken),
-          offer.amount,
+          MATIC,
+          amount,
           offer.expireAt,
           {
-            value: offer.amount,
+            value: amount,
           }
         );
         await offer_tx.wait();
@@ -184,7 +228,6 @@ const ItemPage = () => {
         "any"
       );
       const signer = provider.getSigner();
-
       const market_contract = new ethers.Contract(
         marketContractAddress,
         marketContract.abi,
@@ -231,7 +274,6 @@ const ItemPage = () => {
         "any"
       );
       const signer = provider.getSigner();
-
       const market_contract = new ethers.Contract(
         marketContractAddress,
         marketContract.abi,
@@ -246,17 +288,23 @@ const ItemPage = () => {
           marketContractAddress,
           Number(id)
         );
-        // const _paymentToken = getTokenAddress(listingParams.paymentToken);
-        const _paymentToken = ethers.constants.AddressZero;
+        const saleId = (await market_contract.getListings()).length;
+        const price = parseTokenAmount(
+          wallet.network,
+          listingParams.paymentToken,
+          listingParams.amount
+        );
+
         const list_tx = await market_contract.listItem(
           Number(id),
-          _paymentToken,
-          listingParams.amount
+          listingParams.paymentToken,
+          price
         );
         await list_tx.wait();
 
         handleClose();
         setLoading(false);
+        navigate(`/sale-page/${saleId}`);
       } catch (err) {
         handleClose();
         setLoading(false);
@@ -274,7 +322,6 @@ const ItemPage = () => {
           "any"
         );
         const signer = provider.getSigner();
-
         const market_contract = new ethers.Contract(
           marketContractAddress,
           marketContract.abi,
@@ -283,6 +330,17 @@ const ItemPage = () => {
 
         const startTime = Math.floor(auctionParams.startTime.getTime() / 1000);
         const endTime = Math.floor(auctionParams.endTime.getTime() / 1000);
+        const auctionId = (await market_contract.getAuctions()).length;
+        const startPrice = parseTokenAmount(
+          wallet.network,
+          auctionParams.paymentToken,
+          auctionParams.startPrice
+        );
+        const directPrice = parseTokenAmount(
+          wallet.network,
+          auctionParams.paymentToken,
+          auctionParams.directPrice
+        );
 
         await approveERC721(
           signer,
@@ -293,16 +351,16 @@ const ItemPage = () => {
 
         const auction_tx = await market_contract.startAuction(
           Number(id),
-          // getTokenAddress(auctionParams.paymentToken),
-          ethers.constants.AddressZero,
-          Number(auctionParams.directPrice),
-          Number(auctionParams.startPrice),
+          auctionParams.paymentToken,
+          directPrice,
+          startPrice,
           startTime,
           endTime
         );
         await auction_tx.wait();
 
         setLoading(false);
+        navigate(`/auction-page/${auctionId}`);
       } catch (err) {
         setLoading(false);
         console.log(err);
@@ -336,13 +394,13 @@ const ItemPage = () => {
             <div className="item-seller-creator-profile">
               <img
                 className="item-seller-creator-img"
-                src={images.user}
+                src={metaData.ownerInfo.imageUri}
                 alt="profile image"
               />
               <div className="item-seller-creator-info">
-                <p>Creator</p>
+                <p>Owner</p>
                 <br />
-                <h4>Rian Leon </h4>
+                <h4>{metaData.ownerInfo.username}</h4>
               </div>
             </div>
             <div
@@ -351,13 +409,15 @@ const ItemPage = () => {
             >
               <img
                 className="item-seller-creator-img"
-                src={images.user}
+                src={metaData.creatorInfo.imageUri}
                 alt="profile image"
               />
               <div className="item-seller-creator-info">
-                <p>Owner</p>
+                <p>Creator</p>
                 <br />
-                <h4>Rian Leon </h4>
+                <a href={`/creator-profile/${metaData.creatorAddress}`}>
+                  <h4>{metaData.creatorInfo.username}</h4>
+                </a>
               </div>
             </div>
           </div>
@@ -368,28 +428,30 @@ const ItemPage = () => {
             <p>{metaData.description}</p>
           </div>
           <div className="item-content-buy">
-            {offer.hasOffer ? (
-              <button
-                className="primary-btn"
-                type="submit"
-                onClick={() => {
-                  setModalType("Offer");
-                  handleShow();
-                }}
-              >
-                Change Offer
-              </button>
-            ) : wallet.account !== metaData.owner ? (
-              <button
-                className="primary-btn"
-                type="submit"
-                onClick={() => {
-                  setModalType("Offer");
-                  handleShow();
-                }}
-              >
-                Make Offer
-              </button>
+            {wallet.account !== metaData.ownerAddress ? (
+              offer.hasOffer ? (
+                <button
+                  className="primary-btn"
+                  type="submit"
+                  onClick={() => {
+                    setModalType("Offer");
+                    handleShow();
+                  }}
+                >
+                  Change Offer
+                </button>
+              ) : (
+                <button
+                  className="primary-btn"
+                  type="submit"
+                  onClick={() => {
+                    setModalType("Offer");
+                    handleShow();
+                  }}
+                >
+                  Make Offer
+                </button>
+              )
             ) : (
               <div className="sale-content-buy">
                 <button
@@ -453,7 +515,10 @@ const ItemPage = () => {
                         type="submit"
                         key={index}
                         onClick={() =>
-                          setOffer({ ...offer, paymentToken: index })
+                          setOffer({
+                            ...offer,
+                            paymentToken: token.address,
+                          })
                         }
                       >
                         <span className="token_text">{token.symbol}</span>
@@ -501,7 +566,7 @@ const ItemPage = () => {
                         onChange={() =>
                           setListingParams({
                             ...listingParams,
-                            paymentToken: index,
+                            paymentToken: token.address,
                           })
                         }
                       >
@@ -556,7 +621,7 @@ const ItemPage = () => {
                         onChange={() =>
                           setAuctionParams({
                             ...auctionParams,
-                            paymentToken: index,
+                            paymentToken: token.address,
                           })
                         }
                       >
