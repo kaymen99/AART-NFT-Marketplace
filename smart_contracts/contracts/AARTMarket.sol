@@ -129,10 +129,8 @@ contract AARTMarket is
         _allowedToken(_paymentToken);
 
         if (nftContract.ownerOf(_tokenId) == address(0)) revert();
-
         if (_expirationTime <= block.timestamp)
             revert AARTMarket_InvalidExpirationTime();
-
         if (_paymentToken == address(0)) {
             // can not approve MATIC so offerer is obliged to escrow offerPrice to this contract
             // the fund can be withdrawn by canceling the offer
@@ -153,7 +151,7 @@ contract AARTMarket is
         offer.offerer = msg.sender;
         offer.paymentToken = _paymentToken;
         offer.price = _offerPrice;
-        offer.expireTime = uint128(_expirationTime);
+        offer.expireTime = uint48(_expirationTime);
         offer.status = OfferStatus.Active;
 
         emit NewOffer(offerId, _tokenId, msg.sender);
@@ -163,7 +161,6 @@ contract AARTMarket is
         Offer storage offer = _offers[_tokenId][_offerId];
 
         _isAARTTokenOwner(_tokenId, msg.sender);
-
         if (_offerStatus(_tokenId, _offerId) != OfferStatus.Active)
             revert AARTMarket_OfferNotActive(_offerId, _tokenId);
 
@@ -211,18 +208,18 @@ contract AARTMarket is
         address _paymentToken,
         uint256 _directBuyPrice,
         uint256 _startPrice,
-        uint128 _startTime,
-        uint128 _endTime
+        uint256 _startTime,
+        uint256 _endTime
     ) external returns (uint256 auctionId) {
         // check that token is allowed
         _allowedToken(_paymentToken);
-
         _isAARTTokenOwner(_tokenId, msg.sender);
+        _startTime = _startTime < block.timestamp
+            ? uint48(block.timestamp)
+            : uint48(_startTime);
 
         if (_endTime <= _startTime)
             revert AARTMarket_InvalidAuctionPeriod(_endTime, _startTime);
-        if (_startTime < block.timestamp)
-            revert AARTMarket_InvalidStartTime(_startTime);
         if (_startPrice == 0) revert AARTMarket_InvalidStartPrice();
         if (_directBuyPrice <= _startPrice)
             revert AARTMarket_InvalidDirectBuyPrice(_directBuyPrice);
@@ -236,8 +233,8 @@ contract AARTMarket is
         _auction.paymentToken = _paymentToken;
         _auction.directBuyPrice = _directBuyPrice;
         _auction.startPrice = _startPrice;
-        _auction.startTime = uint128(_startTime);
-        _auction.endTime = uint128(_endTime);
+        _auction.startTime = uint48(_startTime);
+        _auction.endTime = uint48(_endTime);
         _auction.status = AuctionStatus.Open;
 
         // transfer nft to this contract
@@ -441,35 +438,32 @@ contract AARTMarket is
         PaymentLib.transferToken(paymentToken, buyer, seller, finalAmount);
     }
 
-    function _offerStatus(uint256 tokenId, uint256 offerId)
-        internal
-        view
-        returns (OfferStatus)
-    {
-        Offer memory offer = _offers[tokenId][offerId];
-        if (block.timestamp > offer.expireTime) {
+    function _offerStatus(
+        uint256 tokenId,
+        uint256 offerId
+    ) internal view returns (OfferStatus) {
+        Offer storage offer = _offers[tokenId][offerId];
+        if (offer.expireTime < uint48(block.timestamp)) {
             return OfferStatus.Ended;
         } else {
             return offer.status;
         }
     }
 
-    function _auctionStatus(uint256 auctionId)
-        internal
-        view
-        returns (AuctionStatus)
-    {
+    function _auctionStatus(
+        uint256 auctionId
+    ) internal view returns (AuctionStatus) {
         Auction storage auction = _auctions[auctionId];
         AuctionStatus status = auction.status;
-
+        uint48 timestamp = uint48(block.timestamp);
         if (
             status == AuctionStatus.Canceled ||
             status == AuctionStatus.DirectBuy
         ) {
             return status;
-        } else if (auction.startTime > block.timestamp) {
+        } else if (auction.startTime > timestamp) {
             return AuctionStatus.Closed;
-        } else if (block.timestamp <= auction.endTime) {
+        } else if (timestamp <= auction.endTime) {
             return AuctionStatus.Open;
         } else {
             return AuctionStatus.Ended;
@@ -488,19 +482,22 @@ contract AARTMarket is
         return _auctions;
     }
 
-    function getTokenBuyOffers(uint256 tokenId)
-        external
-        view
-        returns (Offer[] memory)
-    {
+    function getAuctionStatus(
+        uint256 _auctionId
+    ) external view returns (AuctionStatus) {
+        return _auctionStatus(_auctionId);
+    }
+
+    function getTokenBuyOffers(
+        uint256 tokenId
+    ) external view returns (Offer[] memory) {
         return _offers[tokenId];
     }
 
-    function getUserBidAmount(uint256 auctionId, address account)
-        external
-        view
-        returns (uint256)
-    {
+    function getUserBidAmount(
+        uint256 auctionId,
+        address account
+    ) external view returns (uint256) {
         return auctionBidderAmounts[auctionId][account];
     }
 
