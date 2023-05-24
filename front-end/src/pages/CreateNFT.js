@@ -7,9 +7,7 @@ import { CircularProgress } from "@mui/material";
 import { ethers } from "ethers";
 import { saveContent } from "../utils/ipfsStorage";
 import nftContract from "../artifacts/AARTCollection.sol/AARTCollection.json";
-import artistsContract from "../artifacts/AARTArtists.sol/AARTArtists.json";
 import {
-  artistsContractAddress,
   nftContractAddress,
   networkDeployedTo,
 } from "../utils/contracts-config";
@@ -17,8 +15,7 @@ import networksMap from "../utils/networksMap.json";
 
 const CreateNFT = () => {
   let navigate = useNavigate();
-  const wallet = useSelector((state) => state.blockchain.value);
-  const [hasProfile, setHasProfile] = useState(false);
+  const wallet = useSelector((state) => state.userData.value);
 
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState({
@@ -41,22 +38,6 @@ const CreateNFT = () => {
     });
   };
 
-  const getUserProfile = async () => {
-    if (wallet.network === networksMap[networkDeployedTo]) {
-      const provider = new ethers.providers.Web3Provider(
-        window.ethereum,
-        "any"
-      );
-      const artists_contract = new ethers.Contract(
-        artistsContractAddress,
-        artistsContract.abi,
-        provider
-      );
-      const _hasProfile = await artists_contract.hasProfile(wallet.account);
-      setHasProfile(_hasProfile);
-    }
-  };
-
   const generateImage = async () => {};
 
   const create = async () => {
@@ -76,7 +57,7 @@ const CreateNFT = () => {
 
         const fee = await nft_contract.callStatic.mintFee();
 
-        await generateImage();
+        // await generateImage();
 
         let cid = await saveContent(image.image);
         const imageUri = `ipfs://${cid}/${image.name}`;
@@ -123,18 +104,9 @@ const CreateNFT = () => {
     }
   };
 
-  useEffect(() => {
-    const get = async () => {
-      if (window.ethereum !== undefined) {
-        await getUserProfile();
-      }
-    };
-    get();
-  }, []);
-
   return (
     <div className="create section__padding">
-      {hasProfile ? (
+      {wallet.registred ? (
         <div className="create-container">
           <h1>Create new NFT</h1>
           <form className="writeForm" autoComplete="off">
@@ -182,6 +154,15 @@ const CreateNFT = () => {
                 rows={4}
                 placeholder="Enter the image description for the AI generator"
               ></textarea>
+            </div>
+            <div className="formGroup">
+              <label>Art Image Description</label>
+              <input
+                type="file"
+                onChange={async (e) => {
+                  await getImage(e);
+                }}
+              />
             </div>
             <div className="mint-btn">
               <button
