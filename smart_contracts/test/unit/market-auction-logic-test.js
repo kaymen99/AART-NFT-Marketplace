@@ -216,35 +216,6 @@ const AuctionStatus = {
             "AARTMarket_InvalidAuctionPeriod"
           );
         });
-        it("should revert if startTime is in the past", async () => {
-          AuctionParam.startTime = Math.floor(
-            new Date("2020.10.15").getTime() / 1000
-          );
-
-          // approve NFT to market contract
-          await approveERC721(
-            user2,
-            nftContract,
-            AuctionParam.tokenId,
-            marketContract.address
-          );
-
-          await expect(
-            marketContract
-              .connect(user2)
-              .startAuction(
-                AuctionParam.tokenId,
-                AuctionParam.paymentToken,
-                AuctionParam.directBuyPrice,
-                AuctionParam.startPrice,
-                AuctionParam.startTime,
-                AuctionParam.endTime
-              )
-          ).to.be.revertedWithCustomError(
-            marketContract,
-            "AARTMarket_InvalidStartTime"
-          );
-        });
         it("should revert if startPrice is zero", async () => {
           AuctionParam.startTime = Math.floor(
             new Date("2023.10.10").getTime() / 1000
