@@ -40,9 +40,9 @@ interface IAARTMarket {
 
     struct Offer {
         address offerer;
-        address paymentToken; // set to address(0) for MATIC
         uint256 price;
-        uint256 expireTime;
+        address paymentToken; // set to address(0) for MATIC
+        uint48 expireTime;
         OfferStatus status;
     }
 
@@ -51,11 +51,11 @@ interface IAARTMarket {
         address seller;
         address paymentToken; // set to address(0) for MATIC
         address highestBidder;
+        uint48 startTime;
+        uint48 endTime;
         uint256 highestBid;
         uint256 directBuyPrice;
         uint256 startPrice;
-        uint128 startTime;
-        uint128 endTime;
         AuctionStatus status;
     }
 
@@ -85,8 +85,8 @@ interface IAARTMarket {
         address _paymentToken,
         uint256 _directBuyPrice,
         uint256 _startPrice,
-        uint128 _startTime,
-        uint128 _endTime
+        uint256 _startTime,
+        uint256 _endTime
     ) external returns (uint256 auctionId);
 
     function bid(uint256 _auctionId, uint256 _amount) external payable;
