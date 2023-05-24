@@ -1,22 +1,29 @@
 import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.css";
+import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { updateAccountData, disconnect } from "../../features/blockchain";
+import { updateUserData, disconnect } from "../../features/userData";
 import { ethers, utils } from "ethers";
 import Web3Modal from "web3modal";
-
+import axios from "axios";
 import Account from "./Account";
-import images from "../../assets/images";
 import networks from "../../utils/networksMap.json";
 import useComponentVisible from "../../hooks/visible";
 import Button from "../Button";
+import artistsContract from "../../artifacts/AARTArtists.sol/AARTArtists.json";
+import { IPFS_GATEWAY } from "../../utils/ipfsStorage";
+import {
+  artistsContractAddress,
+  networkDeployedTo,
+} from "../../utils/contracts-config";
 
 const eth = window.ethereum;
 let web3Modal = new Web3Modal();
 
 function Connect() {
+  let navigate = useNavigate();
   const dispatch = useDispatch();
-  const wallet = useSelector((state) => state.blockchain.value);
+  const wallet = useSelector((state) => state.userData.value);
 
   const [injectedProvider, setInjectedProvider] = useState();
   const [profile, setProfile] = useState(false);
@@ -45,11 +52,39 @@ function Connect() {
       const account = await signer.getAddress();
       const balance = await signer.getBalance();
 
+      let username, profileImg, registred;
+      if (networks[String(chainId.chainId)] === networks[networkDeployedTo]) {
+        const artists_contract = new ethers.Contract(
+          artistsContractAddress,
+          artistsContract.abi,
+          provider
+        );
+        const hasProfile = await artists_contract.hasProfile(account);
+        if (hasProfile) {
+          const userProfile = await artists_contract.getUserProfile(account);
+          const _metadata = await axios.get(
+            userProfile[1].replace("ipfs://", IPFS_GATEWAY)
+          );
+
+          registred = true;
+          username = _metadata.data.username;
+          profileImg = _metadata.data.imageUri.replace("ipfs://", IPFS_GATEWAY);
+        } else {
+          registred = false;
+          username = "Jane Doe";
+          profileImg =
+            "https://thumbs.dreamstime.com/b/profile-icon-black-background-graphic-web-design-modern-simple-vector-sign-internet-concept-trendy-symbol-profile-138113075.jpg";
+        }
+      }
+
       dispatch(
-        updateAccountData({
+        updateUserData({
           account: account,
           balance: utils.formatUnits(balance),
           network: networks[String(chainId.chainId)],
+          registred: registred,
+          username: username,
+          profileImg: profileImg,
         })
       );
     } else {
@@ -69,6 +104,7 @@ function Connect() {
       setInjectedProvider(null);
     }
     dispatch(disconnect());
+    navigate("/");
   }
 
   useEffect(() => {
@@ -93,7 +129,7 @@ function Connect() {
             <div className="navbar-container-account" ref={ref}>
               <img
                 className="navbar-container-account"
-                src={images.user}
+                src={wallet.profileImg}
                 alt="Profile"
                 width="40px"
                 height="40px"
