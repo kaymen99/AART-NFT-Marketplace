@@ -13,7 +13,6 @@ contract AARTErrors {
     error AARTMarket_OfferNotActive(uint256 offerId, uint256 tokenId);
     error AARTMarket_OnlyOfferer(uint256 offerId, uint256 tokenId);
     error AARTMarket_InvalidAuctionPeriod(uint256 endTime, uint256 startTime);
-    error AARTMarket_InvalidStartTime(uint256 startTime);
     error AARTMarket_InvalidStartPrice();
     error AARTMarket_InvalidDirectBuyPrice(uint256 directBuyPrice);
     error AARTMarket_AuctionNotOpen(uint256 auctionId);
