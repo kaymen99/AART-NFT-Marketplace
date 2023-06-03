@@ -10,9 +10,8 @@ const Services = () => {
             <div className="service-bx wow zoomIn">
               <h2>Services</h2>
               <p>
-                Lorem Ipsum is simply dummy text of the printing and typesetting
-                industry.<br></br> Lorem Ipsum has been the industry's standard
-                dummy text.
+                Explore our range of cutting-edge services designed to elevate
+                your AI NFT experience.
               </p>
               <section className="features-icons text-center">
                 <div className="container">
@@ -23,13 +22,13 @@ const Services = () => {
                           <img
                             src={images.service1}
                             alt="Filter & Discover"
-                            style={{ width: "60px", height: "60px" }}
+                            style={{ width: "50px", height: "50px" }}
                           />
                         </div>
-                        <h4>Fully Responsive</h4>
+                        <h4>AI-Generated NFT</h4>
                         <p className="lead mb-0">
-                          This theme will look great on any device, no matter
-                          the size!
+                          Easily create your own AI-generated artworks and
+                          tokenize them on our platform
                         </p>
                       </div>
                     </div>
@@ -39,13 +38,13 @@ const Services = () => {
                           <img
                             src={images.service2}
                             alt="Filter & Discover"
-                            style={{ width: "60px", height: "60px" }}
+                            style={{ width: "50px", height: "50px" }}
                           />
                         </div>
-                        <h4>Bootstrap 5 Ready</h4>
+                        <h4>NFT Sales</h4>
                         <p className="lead mb-0">
-                          Featuring the latest build of the new Bootstrap 5
-                          framework!
+                          Buy and sell unique AI-generated NFTs securely on our
+                          marketplace.
                         </p>
                       </div>
                     </div>
@@ -55,13 +54,13 @@ const Services = () => {
                           <img
                             src={images.service3}
                             alt="Filter & Discover"
-                            style={{ width: "60px", height: "60px" }}
+                            style={{ width: "50px", height: "50px" }}
                           />
                         </div>
-                        <h4>Easy to Use</h4>
+                        <h4>Auction Platform</h4>
                         <p className="lead mb-0">
-                          Ready to use with your own content, or customize the
-                          source files!
+                          Participate in exciting auctions to acquire unique
+                          AI-generated NFTs.
                         </p>
                       </div>
                     </div>
@@ -71,31 +70,31 @@ const Services = () => {
                       <div className="features-icons-item mx-auto mb-5 mb-lg-0 mb-lg-3">
                         <div className="features-icons-icon">
                           <img
-                            src={images.service1}
+                            src={images.service4}
                             alt="Filter & Discover"
-                            style={{ width: "60px", height: "60px" }}
+                            style={{ width: "50px", height: "50px" }}
                           />
                         </div>
-                        <h4>Fully Responsive</h4>
+                        <h4>NFT Royalties</h4>
                         <p className="lead mb-0">
-                          This theme will look great on any device, no matter
-                          the size!
+                          Creators earn royalties whenever their NFTs are resold
+                          on the marketplace.
                         </p>
                       </div>
                     </div>
                     <div className="col-lg-4">
                       <div className="features-icons-item mx-auto mb-5 mb-lg-0 mb-lg-3">
                         <div className="features-icons-icon">
+                          <i className="fab fa-github"></i>
                           <img
-                            src={images.service2}
+                            src={images.service3}
                             alt="Filter & Discover"
-                            style={{ width: "60px", height: "60px" }}
+                            style={{ width: "50px", height: "50px" }}
                           />
                         </div>
-                        <h4>Bootstrap 5 Ready</h4>
+                        <h4>Creator NFT Profiles</h4>
                         <p className="lead mb-0">
-                          Featuring the latest build of the new Bootstrap 5
-                          framework!
+                          Create and mint your personalized creator profile NFT.
                         </p>
                       </div>
                     </div>
@@ -103,15 +102,15 @@ const Services = () => {
                       <div className="features-icons-item mx-auto mb-0 mb-lg-3">
                         <div className="features-icons-icon">
                           <img
-                            src={images.service3}
+                            src={images.service1}
                             alt="Filter & Discover"
-                            style={{ width: "60px", height: "60px" }}
+                            style={{ width: "50px", height: "50px" }}
                           />
                         </div>
-                        <h4>Easy to Use</h4>
+                        <h4>Secure Marketplace</h4>
                         <p className="lead mb-0">
-                          Ready to use with your own content, or customize the
-                          source files!
+                          Enjoy a safe and reliable trading environment, backed
+                          by blockchain technology.
                         </p>
                       </div>
                     </div>
