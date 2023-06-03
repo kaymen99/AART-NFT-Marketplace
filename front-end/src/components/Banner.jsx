@@ -10,7 +10,7 @@ const Banner = () => {
       <div className="banner-content">
         <div className="banner-box">
           <h1>Start Your Journey Into AI Art</h1>
-          <p>Push your creativity to mint stunning NFTs</p>
+          <p>Join our community and unleash the power of AI-infused art</p>
 
           <div className="banner-box-btn">
             <Link to="/register">
