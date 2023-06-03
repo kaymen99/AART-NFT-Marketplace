@@ -108,7 +108,7 @@ This will create a config.js file and an artifacts folder and transfer them to t
       chainId: 80001,
     }
    ```
-And for the deployment use the command : 
+    And for the deployment use the command : 
    ```sh
    yarn deploy --mumbai
    ```
