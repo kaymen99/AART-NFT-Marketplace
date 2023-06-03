@@ -63,6 +63,11 @@ Please install or have installed the following:
 * [MetaMask](https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn) Chrome extension installed in your browser
 * [Ganache](https://trufflesuite.com/ganache/) for local smart contracts deployement and testing.
 
+The app uses `web3.storage` api to upload the generated NFT image & metadata into IPFS, so you need to create an account and a new api token [here](https://web3.storage), when you finish add your api token into the `src/utils/ipfsStorage.js` file:
+   ```js
+    const web3storage_key = "YOUR-WEB3.STORAGE-API-TOKEN";
+   ```
+
 Clone this repo with the command :
    ```sh
    git clone https://github.com/kaymen99/AART-NFT-Marketplace.git
