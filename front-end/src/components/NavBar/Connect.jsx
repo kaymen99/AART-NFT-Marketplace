@@ -16,6 +16,7 @@ import {
   artistsContractAddress,
   networkDeployedTo,
 } from "../../utils/contracts-config";
+import { defaultProfileImg } from "../../utils/helpers";
 
 const eth = window.ethereum;
 let web3Modal = new Web3Modal();
@@ -41,6 +42,10 @@ function Connect() {
     useComponentVisible(true, setProfile);
 
   async function fetchAccountData() {
+    let username, profileImg, registred;
+    registred = false;
+    username = "Jane Doe";
+    profileImg = defaultProfileImg;
     if (typeof window.ethereum !== "undefined") {
       const connection = await web3Modal.connect();
       const provider = new ethers.providers.Web3Provider(connection);
@@ -52,7 +57,6 @@ function Connect() {
       const account = await signer.getAddress();
       const balance = await signer.getBalance();
 
-      let username, profileImg, registred;
       if (networks[String(chainId.chainId)] === networks[networkDeployedTo]) {
         const artists_contract = new ethers.Contract(
           artistsContractAddress,
@@ -69,11 +73,6 @@ function Connect() {
           registred = true;
           username = _metadata.data.username;
           profileImg = _metadata.data.imageUri.replace("ipfs://", IPFS_GATEWAY);
-        } else {
-          registred = false;
-          username = "Jane Doe";
-          profileImg =
-            "https://thumbs.dreamstime.com/b/profile-icon-black-background-graphic-web-design-modern-simple-vector-sign-internet-concept-trendy-symbol-profile-138113075.jpg";
         }
       }
 
