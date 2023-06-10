@@ -2,7 +2,6 @@ import React from "react";
 import { useSelector } from "react-redux";
 import { FaUserAlt, FaUserEdit } from "react-icons/fa";
 import { MdLogout } from "react-icons/md";
-import images from "../../assets/images";
 
 const Account = ({ disconnect }) => {
   const wallet = useSelector((state) => state.userData.value);
@@ -11,7 +10,7 @@ const Account = ({ disconnect }) => {
     <div className="account">
       <div className="account-box">
         <img
-          src={wallet.profileImg !== "" ? wallet.profileImg : images.user}
+          src={wallet.profileImg}
           alt="user account"
           className="account-img"
         />
