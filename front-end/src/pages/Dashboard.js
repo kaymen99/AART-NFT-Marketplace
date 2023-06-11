@@ -8,16 +8,15 @@ import { Tab, Tabs, TabList, TabPanel } from "react-tabs";
 import axios from "axios";
 import { IPFS_GATEWAY } from "../utils/ipfsStorage";
 import marketContract from "../artifacts/AARTMarket.sol/AARTMarket.json";
-import artistsContract from "../artifacts/AARTArtists.sol/AARTArtists.json";
 import nftContract from "../artifacts/AARTCollection.sol/AARTCollection.json";
 import {
   marketContractAddress,
   nftContractAddress,
-  artistsContractAddress,
   networkDeployedTo,
 } from "../utils/contracts-config";
 import networksMap from "../utils/networksMap.json";
 import { Listing1, Listing, Paginator } from "../components";
+import { formatTokenAmount } from "../utils/tokens-utils";
 
 const Dashboard = () => {
   const wallet = useSelector((state) => state.userData.value);
@@ -68,31 +67,45 @@ const Dashboard = () => {
       setUserNftsList(_userNfts);
 
       const nftsInSale = (await market_contract.getListings()).filter(
-        (s) => s[0] === wallet.account
+        (s) => s.seller === wallet.account
       );
       const nftsInAuction = (await market_contract.getAuctions()).filter(
-        (a) => a[0] === wallet.account
+        (a) => a.seller === wallet.account
       );
 
       const activeAuctions = await Promise.all(
         nftsInAuction.map(async (auction, index) => {
-          if (auction.status === 0) {
+          const currentStaus = await market_contract.getAuctionStatus(index);
+          if (currentStaus === 0) {
             const tokenId = Number(auction.tokenId);
             const tokenUri = await nft_contract.tokenURI(tokenId);
             const metadata = await axios.get(
               tokenUri.replace("ipfs://", IPFS_GATEWAY)
             );
+            const price =
+              Number(auction.highestBid) === 0
+                ? Number(auction.startPrice)
+                : Number(auction.highestBid);
+
             return {
-              auctionId: index,
-              tokenId: auction.tokenId,
+              id: index,
+              tokenId: tokenId,
               name: metadata.data.name,
               uri: metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
-              price: auction.highestBid,
+              price: formatTokenAmount(
+                wallet.network,
+                auction.paymentToken,
+                price
+              ),
+              path: `/auction-page`,
             };
           }
         })
       );
-      const sellingNfts = activeAuctions.concat(nftsInSale);
+      const filteredAuctions = activeAuctions.filter(
+        (auction) => auction !== undefined
+      );
+      const sellingNfts = filteredAuctions.concat(nftsInSale);
       setInSaleList(sellingNfts);
     }
   };
@@ -117,6 +130,11 @@ const Dashboard = () => {
               tokenUri.replace("ipfs://", IPFS_GATEWAY)
             );
             if (_metadata.data.creator === wallet.account) {
+              console.log({
+                tokenId: Number(token.id),
+                name: _metadata.data.name,
+                uri: _metadata.data.image.replace("ipfs://", IPFS_GATEWAY),
+              });
               return {
                 tokenId: Number(token.id),
                 name: _metadata.data.name,
