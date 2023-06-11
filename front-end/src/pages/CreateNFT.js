@@ -25,7 +25,7 @@ const CreateNFT = () => {
   const [formInput, setFormInput] = useState({
     name: "",
     description: "",
-    category: "",
+    category: "Art",
   });
 
   const getImage = async (e) => {
