@@ -1,13 +1,13 @@
 import "./../assets/styles/pages/auctionPage.css";
-
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Modal, Table } from "react-bootstrap";
 import { ethers } from "ethers";
 import moment from "moment";
 import axios from "axios";
 import { AiOutlineClose } from "react-icons/ai";
+import { MdTimer } from "react-icons/md";
 import { CircularProgress } from "@mui/material";
 import marketContract from "../artifacts/AARTMarket.sol/AARTMarket.json";
 import nftContract from "../artifacts/AARTCollection.sol/AARTCollection.json";
@@ -28,8 +28,10 @@ import {
   getTokenFromAddress,
   parseTokenAmount,
 } from "../utils/tokens-utils";
+import AuctionCountDown from "../components/AuctionCountDown";
 
 const AuctionPage = () => {
+  let navigate = useNavigate();
   const { id } = useParams();
   const wallet = useSelector((state) => state.userData.value);
   const [loading, setLoading] = useState(false);
@@ -143,8 +145,8 @@ const AuctionPage = () => {
         highestBid: highestBid,
         directPrice: directPrice,
         startPrice: startPrice,
-        startTime: startTime,
-        endTime: Number(auction[5]),
+        startTime: startTime * 1000,
+        endTime: Number(auction[5]) * 1000,
         status: auctionStatus[status],
       });
       setBiddingParams({ ...biddingParams, bidAmount: userBidAmount });
@@ -332,8 +334,16 @@ const AuctionPage = () => {
         signer
       );
 
-      const cancel_tx = await market_contract.cancelAuction(Number(id));
-      await cancel_tx.wait();
+      try {
+        setLoading(true);
+        const cancel_tx = await market_contract.cancelAuction(Number(id));
+        await cancel_tx.wait();
+        setLoading(false);
+        navigate(`/nft-page/${Number(id)}`);
+      } catch (err) {
+        setLoading(false);
+        console.log(err);
+      }
     }
   };
 
@@ -388,19 +398,29 @@ const AuctionPage = () => {
           <div className="item-desc">
             <p>{auctionInfo.description}</p>
           </div>
+          {auctionInfo.status === "Open" ? (
+            <div>
+              <p className="auction-timer-info">
+                <MdTimer className="auction-timer-icon" />
+                <span>Auction ending in</span>
+              </p>
+              <AuctionCountDown date={auctionInfo.endTime} />
+            </div>
+          ) : auctionInfo.status === "Closed" ? (
+            <div>
+              <p className="auction-timer-info">
+                <MdTimer className="auction-timer-icon" />
+                <span>Auction starts in</span>
+              </p>
+              <AuctionCountDown date={auctionInfo.startTime} />
+            </div>
+          ) : null}
+
           <div className="auction-bid-info">
             <Table responsive style={{ color: "white" }}>
               <tbody>
                 {auctionInfo.status === "Open" ? (
                   <>
-                    <tr>
-                      <td className="p-2">Ends in</td>
-                      <td>
-                        {moment
-                          .unix(auctionInfo.endTime)
-                          .format("MMM D, HH:mmA")}
-                      </td>
-                    </tr>
                     {auctionInfo.highestBidder === MATIC ? (
                       <tr>
                         <td className="p-2">Start price</td>
@@ -459,22 +479,6 @@ const AuctionPage = () => {
                 ) : auctionInfo.status === "Closed" ? (
                   <>
                     <tr>
-                      <td className="p-2">Starts in</td>
-                      <td>
-                        {moment
-                          .unix(auctionInfo.startTime)
-                          .format("MMM D, HH:mmA")}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="p-2">Ends in</td>
-                      <td>
-                        {moment
-                          .unix(auctionInfo.endTime)
-                          .format("MMM D, HH:mmA")}
-                      </td>
-                    </tr>
-                    <tr>
                       <td className="p-2">Start price</td>
                       <td>
                         {auctionInfo.startPrice}{" "}
@@ -505,7 +509,7 @@ const AuctionPage = () => {
                       <td className="p-2">Started in</td>
                       <td>
                         {moment
-                          .unix(auctionInfo.startTime)
+                          .unix(auctionInfo.startTime / 1000)
                           .format("MMM D, HH:mmA")}
                       </td>
                     </tr>
@@ -513,7 +517,7 @@ const AuctionPage = () => {
                       <td className="p-2">Ends in</td>
                       <td>
                         {moment
-                          .unix(auctionInfo.endTime)
+                          .unix(auctionInfo.endTime / 1000)
                           .format("MMM D, HH:mmA")}
                       </td>
                     </tr>
