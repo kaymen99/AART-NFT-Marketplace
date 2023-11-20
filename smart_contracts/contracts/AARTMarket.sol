@@ -11,6 +11,9 @@ import "./utils/AARTErrors.sol";
 import "./utils/AARTEvents.sol";
 import "./lib/PaymentLib.sol";
 
+/// @title AART NFT marketplace
+/// @author kaymen99
+/// @notice marketplace that supports direct sales, offers, and auctions for all the AART collection tokens.
 contract AARTMarket is
     IAARTMarket,
     AARTErrors,
@@ -50,6 +53,14 @@ contract AARTMarket is
     //      Direct Sale Logic     //
     // ************************** //
 
+    /**
+     * @dev Lists an NFT for sale in the marketplace.
+     * @dev caller must be NFT owner and payment token must be allowed.
+     * @param _tokenId The ID of the NFT to be listed.
+     * @param _paymentToken address of token used for payment, address(0) for ETH.
+     * @param _buyPrice The sale price of the NFT.
+     * @return listingId The ID of the created listing.
+     */
     function listItem(
         uint256 _tokenId,
         address _paymentToken,
@@ -57,7 +68,6 @@ contract AARTMarket is
     ) external returns (uint256 listingId) {
         // check that token is allowed
         _allowedToken(_paymentToken);
-
         _isAARTTokenOwner(_tokenId, msg.sender);
 
         // check that the user approved this contract to transfer token
@@ -77,6 +87,10 @@ contract AARTMarket is
         emit ItemListed(listingId, msg.sender, _tokenId);
     }
 
+    /**
+     * @dev Purchases an NFT listed for sale in the marketplace.
+     * @param _listingId The ID of the listing to be purchased.
+     */
     function buyItem(uint256 _listingId) external payable {
         Listing memory item = _listings[_listingId];
 
@@ -104,6 +118,10 @@ contract AARTMarket is
         emit ItemSold(_listingId, msg.sender);
     }
 
+    /**
+     * @dev Cancels an NFT listing, called by the seller.
+     * @param _listingId The ID of the listing to be canceled.
+     */
     function cancelListing(uint256 _listingId) external {
         if (msg.sender != _listings[_listingId].seller)
             revert AARTMarket_OnlySeller(_listingId);
@@ -119,6 +137,15 @@ contract AARTMarket is
     //      Offers Logic      //
     // ********************** //
 
+    /**
+     * @dev Creates an offer for an NFT.
+     * @dev must use allowed token for payment.
+     * @param _tokenId The ID of the NFT to make an offer on.
+     * @param _paymentToken The token used to buy NFT, set address(0) for ETH.
+     * @param _offerPrice The price offered for the NFT.
+     * @param _expirationTime The expiration time of the offer.
+     * @return offerId The ID of the created offer.
+     */
     function makeOffer(
         uint256 _tokenId,
         address _paymentToken,
@@ -157,6 +184,12 @@ contract AARTMarket is
         emit NewOffer(offerId, _tokenId, msg.sender);
     }
 
+    /**
+     * @dev Accepts an offer for an NFT.
+     * @dev callable by the NFT owner.
+     * @param _tokenId The ID of the NFT for which the offer is accepted.
+     * @param _offerId The ID of the offer to be accepted.
+     */
     function acceptOffer(uint256 _tokenId, uint256 _offerId) external {
         Offer storage offer = _offers[_tokenId][_offerId];
 
@@ -181,6 +214,11 @@ contract AARTMarket is
         emit OfferAccepted(_offerId, _tokenId, msg.sender);
     }
 
+    /**
+     * @dev Cancels an offer on NFT, callable by the offerer.
+     * @param _tokenId The ID of the NFT for which the offer is canceled.
+     * @param _offerId The ID of the offer to be canceled.
+     */
     function cancelOffer(uint256 _tokenId, uint256 _offerId) external {
         Offer storage offer = _offers[_tokenId][_offerId];
 
@@ -203,6 +241,17 @@ contract AARTMarket is
     //      Auction Logic     //
     // ********************** //
 
+    /**
+     * @dev Starts an auction for an NFT.
+     * @dev caller must be NFT owner and payment token must be allowed.
+     * @param _tokenId The ID of the NFT to be auctioned.
+     * @param _paymentToken The token used for the auction payment, set address(0) for ETH.
+     * @param _directBuyPrice The direct buy price for the NFT.
+     * @param _startPrice The starting bid price for the auction.
+     * @param _startTime The start time of the auction.
+     * @param _endTime The end time of the auction.
+     * @return auctionId The ID of the created auction.
+     */
     function startAuction(
         uint256 _tokenId,
         address _paymentToken,
@@ -243,6 +292,11 @@ contract AARTMarket is
         emit AuctionStarted(auctionId, msg.sender, _tokenId, _startTime);
     }
 
+    /**
+     * @dev Places a bid in an ongoing auction.
+     * @param _auctionId The ID of the auction in which to place a bid.
+     * @param _amount The bid amount.
+     */
     function bid(uint256 _auctionId, uint256 _amount) external payable {
         Auction storage _auction = _auctions[_auctionId];
 
@@ -265,7 +319,6 @@ contract AARTMarket is
             if (_amount < _auction.startPrice)
                 revert AARTMarket_InsufficientBid(_auctionId);
         }
-
         if (token != address(0)) {
             IERC20(token).transferFrom(msg.sender, address(this), _amount);
         }
@@ -277,6 +330,11 @@ contract AARTMarket is
         emit NewBid(_auctionId, msg.sender, oldBidAmount + _amount);
     }
 
+    /**
+     * @dev Directly buys an NFT in an ongoing auction.
+     * @dev must provide exact direct buy price
+     * @param _auctionId The ID of the auction for the direct buy.
+     */
     function directBuyAuction(uint256 _auctionId) external payable {
         Auction storage _auction = _auctions[_auctionId];
 
@@ -300,6 +358,11 @@ contract AARTMarket is
         emit AuctionDirectBuy(_auctionId, msg.sender);
     }
 
+    /**
+     * @dev Withdraws a bid placed in an auction.
+     * @dev highest bidder is not allowed to withdraw bid.
+     * @param _auctionId The ID of the auction from which to withdraw the bid.
+     */
     function withdrawBid(uint256 _auctionId) external {
         if (_auctions[_auctionId].status == AuctionStatus.Open) {
             // if auction is open don't allow highest bidder withdrawal
@@ -307,11 +370,8 @@ contract AARTMarket is
                 revert AARTMarket_IsHighestBidder(_auctionId);
         }
         uint256 bidAmount = auctionBidderAmounts[_auctionId][msg.sender];
-
         if (bidAmount == 0) revert AARTMarket_HasNoBid(_auctionId);
-
         auctionBidderAmounts[_auctionId][msg.sender] = 0;
-
         // return bid amount to the bidder
         PaymentLib.transferToken(
             _auctions[_auctionId].paymentToken,
@@ -321,16 +381,18 @@ contract AARTMarket is
         );
     }
 
+    /**
+     * @dev Ends an auction and transfers the NFT to the highest bidder.
+     * @dev will return NFT to seller if no bid is made.
+     * @param _auctionId The ID of the auction to be ended.
+     */
     function endAuction(uint256 _auctionId) external {
         Auction storage _auction = _auctions[_auctionId];
-
         if (
             _auctionStatus(_auctionId) != AuctionStatus.Ended ||
             _auction.status != AuctionStatus.Open
         ) revert AARTMarket_AuctionPeriodNotEnded(_auctionId, _auction.endTime);
-
         uint256 tokenId = _auction.tokenId;
-
         // update auction status
         _auction.status = AuctionStatus.Ended;
 
@@ -361,6 +423,11 @@ contract AARTMarket is
         emit AuctionEnded(_auctionId, buyer);
     }
 
+    /**
+     * @dev Cancels an ongoing auction, called by the seller.
+     * @dev auction must in open state.
+     * @param _auctionId The ID of the auction to be canceled.
+     */
     function cancelAuction(uint256 _auctionId) external {
         if (msg.sender != _auctions[_auctionId].seller)
             revert AARTMarket_OnlySeller(_auctionId);
@@ -384,6 +451,11 @@ contract AARTMarket is
     //      Internal utils      //
     // ************************ //
 
+    /**
+     * @dev Checks if the provided user is the owner of the AART NFT.
+     * @param _tokenId The ID of the NFT.
+     * @param user The address to be checked.
+     */
     function _isAARTTokenOwner(uint256 _tokenId, address user) internal view {
         // check that the user is the owner of the token
         // also reverts if the token does not exists in the AART collection
@@ -391,6 +463,11 @@ contract AARTMarket is
             revert AARTMarket_OnlyTokenOwner(_tokenId);
     }
 
+    /**
+     * @dev Checks if the provided ERC20 token is allowed in the marketplace.
+     * @dev native ETH is supported by default.
+     * @param token The ERC20 token address to be checked.
+     */
     function _allowedToken(address token) internal view {
         if (token != address(0)) {
             if (!_erc20Tokensmapping[token])
@@ -398,6 +475,14 @@ contract AARTMarket is
         }
     }
 
+    /**
+     * @dev Handles the payment for an NFT purchase, offer acceptance, or auction.
+     * @param tokenId The ID of the NFT.
+     * @param seller The address of the seller.
+     * @param buyer The address of the buyer.
+     * @param paymentToken The token used for payment, address(0) for ETH.
+     * @param price The total payment amount.
+     */
     function _handlePayment(
         uint256 tokenId,
         address seller,
@@ -438,6 +523,12 @@ contract AARTMarket is
         PaymentLib.transferToken(paymentToken, buyer, seller, finalAmount);
     }
 
+    /**
+     * @dev Checks the status of an offer.
+     * @param tokenId The ID of the NFT for which the offer status is checked.
+     * @param offerId The ID of the offer.
+     * @return status The status of the offer.
+     */
     function _offerStatus(
         uint256 tokenId,
         uint256 offerId
@@ -450,6 +541,11 @@ contract AARTMarket is
         }
     }
 
+    /**
+     * @dev Checks the status of an auction.
+     * @param auctionId The ID of the auction.
+     * @return status The status of the auction.
+     */
     function _auctionStatus(
         uint256 auctionId
     ) internal view returns (AuctionStatus) {
@@ -474,26 +570,48 @@ contract AARTMarket is
     //      Getters      //
     // ***************** //
 
+    /**
+     * @dev Retrieves all current listings in the marketplace.
+     */
     function getListings() external view returns (Listing[] memory) {
         return _listings;
     }
 
+    /**
+     * @dev Retrieves all current auctions in the marketplace.
+     */
     function getAuctions() external view returns (Auction[] memory) {
         return _auctions;
     }
 
+    /**
+     * @dev Retrieves the status of an auction.
+     * @param _auctionId The ID of the auction.
+     * @return status The status of the auction.
+     */
     function getAuctionStatus(
         uint256 _auctionId
     ) external view returns (AuctionStatus) {
         return _auctionStatus(_auctionId);
     }
 
+    /**
+     * @dev Retrieves all offers made for a specific NFT.
+     * @param tokenId The ID of the NFT.
+     * @return offers An array of all Offers structures.
+     */
     function getTokenBuyOffers(
         uint256 tokenId
     ) external view returns (Offer[] memory) {
         return _offers[tokenId];
     }
 
+    /**
+     * @dev Retrieves the bid amount placed by a specific user in an auction.
+     * @param auctionId The ID of the auction.
+     * @param account The address of the user.
+     * @return bidAmount The bid amount placed by the user.
+     */
     function getUserBidAmount(
         uint256 auctionId,
         address account
@@ -501,6 +619,9 @@ contract AARTMarket is
         return auctionBidderAmounts[auctionId][account];
     }
 
+    /**
+     * @dev ERC721 receiver callback to accept incoming NFT transfers.
+     */
     function onERC721Received(
         address,
         address,
@@ -514,6 +635,11 @@ contract AARTMarket is
     //     Owner functions    //
     // ********************** //
 
+    /**
+     * @dev Sets the trade fee percentage.
+     * @dev callable by the owner
+     * @param _fee The new trade fee percentage.
+     */
     function setFee(uint256 _fee) external onlyOwner {
         if (_fee > MAX_FEE) revert AARTMarket_InvalidFee(_fee);
         fee = _fee;
@@ -521,10 +647,20 @@ contract AARTMarket is
         emit NewFee(_fee);
     }
 
+    /**
+     * @dev Sets the recipient of market fees.
+     * @dev callable by the owner
+     * @param _newRecipient The new address to receive trade fees.
+     */
     function setFeeRecipient(address _newRecipient) external onlyOwner {
         feeRecipient = _newRecipient;
     }
 
+    /**
+     * @dev Adds support for a new ERC20 token in the marketplace.
+     * @dev callable by the owner.
+     * @param _token The address of the ERC20 token to be supported.
+     */
     function addSupportedToken(address _token) external onlyOwner {
         if (_erc20Tokensmapping[_token])
             revert AARTMarket_AlreadySupported(_token);
