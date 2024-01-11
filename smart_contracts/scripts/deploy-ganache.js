@@ -1,18 +1,14 @@
 const hre = require("hardhat");
 const fs = require("fs");
 const fse = require("fs-extra");
-const {
-  getAmountInWei,
-  deployERC20Mock,
-  deployContract,
-} = require("../utils/helpers");
+const { getAmountInWei, deployContract } = require("../utils/helpers");
 
 async function main() {
   const deployNetwork = hre.network.name;
   const mintCost = getAmountInWei(10); // 10 matic
 
   // Deploy DAI ERC20 mock
-  const mockDAI = await deployERC20Mock(18);
+  const mockDAI = await deployContract("ERC20Mock", [18]);
 
   // Deploy AART Artists contract
   const artistsContract = await deployContract("AARTArtists", []);
