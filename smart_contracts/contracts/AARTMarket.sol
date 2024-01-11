@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.10;
+pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -13,7 +13,7 @@ import "./lib/PaymentLib.sol";
 
 /// @title AART NFT marketplace
 /// @author kaymen99
-/// @notice marketplace that supports direct sales, offers, and auctions for all the AART collection tokens.
+/// @notice marketplace that supports direct sales, offers, and auctions for all the AART NFT collection tokens.
 contract AARTMarket is
     IAARTMarket,
     AARTErrors,

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-
-pragma solidity 0.8.10;
+pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
@@ -99,7 +98,7 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view virtual override(ERC721, ERC2981) returns (bool) {
+    ) public view virtual override(ERC721URIStorage, ERC2981) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -176,7 +175,7 @@ contract AARTCollection is ERC721URIStorage, ERC2981, Ownable {
     }
 
     function withdraw() external payable onlyOwner {
-        (bool success, ) = payable(msg.sender).call{value: address(this).balance}(
+        (bool success, ) = payable(owner()).call{value: address(this).balance}(
             ""
         );
         require(success);

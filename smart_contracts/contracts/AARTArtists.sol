@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.10;
+pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -33,6 +33,7 @@ contract AARTArtists is ERC721URIStorage, Ownable {
     error AART__AlreadyRegistered();
     error AART__OnlyEOA();
     error AART__OnlyTokenOwner(uint tokenId);
+    error AART__NotTransferable();
 
     constructor() ERC721("AART Artists Profiles", "AAP") {}
 
@@ -73,7 +74,7 @@ contract AARTArtists is ERC721URIStorage, Ownable {
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view virtual override(ERC721) returns (bool) {
+    ) public view virtual override(ERC721URIStorage) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -83,7 +84,7 @@ contract AARTArtists is ERC721URIStorage, Ownable {
 
     // Disable all ERC721 transfers : the artists NFT profile are not transferable
     function _transfer(address, address, uint256) internal virtual override {
-        revert("AART profile NFTs are not transferable");
+        revert AART__NotTransferable();
     }
 
     function _setTokenURI(

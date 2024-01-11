@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.10;
+pragma solidity ^0.8.18;
 
 contract AARTEvents {
     event ItemListed(uint256 listingId, address seller, uint256 tokenId);

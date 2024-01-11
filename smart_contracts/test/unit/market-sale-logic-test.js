@@ -1,20 +1,20 @@
 const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
 const {
-  deployArtistsContract,
-  deployNFTContract,
   mintNewNFT,
   mintNewNFTWithRoyalty,
   approveERC721,
   getAmountInWei,
   getAmountFromWei,
   developmentChains,
-  deployERC20Mock,
   mintERC20,
   approveERC20,
+  deployContract,
 } = require("../../utils/helpers");
 
 const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
+
+const mintFee = getAmountInWei(10);
 
 !developmentChains.includes(network.name)
   ? describe.skip
@@ -25,12 +25,67 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
       let marketContract;
       let erc20Mock;
 
+      let tokenId, paymentToken, price;
+
+      async function deployNFTAndMarketContracts() {
+        // Deploy NFT Collection contract
+        nftContract = await deployContract("AARTCollection", [
+          artistsNftContract.target,
+          mintFee,
+        ]);
+
+        // unpause contract
+        await nftContract.pause(2);
+
+        // Deploy AART market contract
+        marketContract = await deployContract("AARTMarket", [
+          nftContract.target,
+        ]);
+      }
+
+      async function listItem(token) {
+        // allow to supported tokens
+        if (token !== ethers.ZeroAddress) {
+          await marketContract.connect(owner).addSupportedToken(token);
+        }
+
+        // mint new item
+        await mintNewNFT(nftContract, user1);
+
+        // create new offer
+        tokenId = 0;
+        price = getAmountInWei(10);
+
+        await approveERC721(user1, nftContract, tokenId, marketContract.target);
+        await marketContract.connect(user1).listItem(tokenId, token, price);
+      }
+
+      async function listItemWithRoyalty(token, royaltyFeeBPS) {
+        // allow to supported tokens
+        if (token !== ethers.ZeroAddress) {
+          await marketContract.connect(owner).addSupportedToken(token);
+        }
+
+        // mint new NFT with royalty
+        await mintNewNFTWithRoyalty(nftContract, user1, royaltyFeeBPS);
+
+        tokenId = 0;
+        // transfer NFT to user2 to test if royalty work
+        await nftContract
+          .connect(user1)
+          .transferFrom(user1.address, user2.address, tokenId);
+
+        price = getAmountInWei(20);
+        await approveERC721(user2, nftContract, tokenId, marketContract.target);
+        await marketContract.connect(user2).listItem(tokenId, token, price);
+      }
+
       before(async () => {
         [owner, user1, user2, user3, randomUser] = await ethers.getSigners();
 
-        erc20Mock = await deployERC20Mock();
+        erc20Mock = await deployContract("ERC20Mock", [18]);
 
-        artistsNftContract = await deployArtistsContract();
+        artistsNftContract = await deployContract("AARTArtists", []);
 
         // register user1, user2, user3, randomUser
         const TEST_URI = "ipfs://test-nft-profile-uri";
@@ -43,29 +98,20 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
 
       describe("listItem()", () => {
         before(async () => {
-          // Deploy NFT Collection contract
-          nftContract = await deployNFTContract(
-            owner,
-            artistsNftContract.address
-          );
-          // Deploy AART market contract
-          const MarketContract = await ethers.getContractFactory("AARTMarket");
-          marketContract = await MarketContract.deploy(nftContract.address);
-          await marketContract.deployed();
+          await deployNFTAndMarketContracts();
         });
-        let tokenId, paymentToken, price;
         it("should not allow user to list item with unsupported payment token", async () => {
           // mint new NFT
           await mintNewNFT(nftContract, user1);
           tokenId = 0;
-          paymentToken = erc20Mock.address;
+          paymentToken = erc20Mock.target;
           price = getAmountInWei(10);
           // approve NFT to market contract
           await approveERC721(
             user1,
             nftContract,
             tokenId,
-            marketContract.address
+            marketContract.target
           );
           await expect(
             marketContract.connect(user1).listItem(tokenId, paymentToken, price)
@@ -74,25 +120,17 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             "AARTMarket_UnsupportedToken"
           );
         });
-        let listedEvent;
         it("should allow user to list his NFT", async () => {
           // allow erc20Mock token
           await marketContract
             .connect(owner)
-            .addSupportedToken(erc20Mock.address);
+            .addSupportedToken(erc20Mock.target);
 
-          const tx = await marketContract
-            .connect(user1)
-            .listItem(tokenId, paymentToken, price);
-          const txReceipt = await tx.wait(1);
-          listedEvent = txReceipt.events[0];
-          expect((await marketContract.getListings()).length).to.be.equal(1);
-        });
-        it("should emit ItemListed event", async () => {
-          expect(listedEvent.event).to.be.equal("ItemListed");
-          expect(listedEvent.args.listingId).to.be.equal(0);
-          expect(listedEvent.args.seller).to.be.equal(user1.address);
-          expect(listedEvent.args.tokenId).to.be.equal(tokenId);
+          await expect(
+            marketContract.connect(user1).listItem(tokenId, paymentToken, price)
+          )
+            .to.emit(marketContract, "ItemListed")
+            .withArgs(0, user1.address, tokenId);
         });
         it("should store correct item info", async () => {
           const listingId = 0;
@@ -107,7 +145,7 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
           // mint new NFT
           await mintNewNFT(nftContract, user2);
           tokenId = 1;
-          paymentToken = ethers.constants.AddressZero;
+          paymentToken = ethers.ZeroAddress;
           price = getAmountInWei(10);
           await expect(
             marketContract.connect(user1).listItem(tokenId, paymentToken, price)
@@ -129,30 +167,13 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
       describe("buyItem()", () => {
         describe("Case without Royalty", () => {
           describe("ERC20 token payment", () => {
-            let tokenId, paymentToken, price;
             let user1InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, feeRecipientBeforeBalance;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
+              await deployNFTAndMarketContracts();
 
-              // allow erc20Mock token
-              await marketContract
-                .connect(owner)
-                .addSupportedToken(erc20Mock.address);
-
-              fee = await marketContract.fee();
+              // list NFT for sale
+              await listItem(erc20Mock.target);
 
               // user1 erc20 balance
               user1InitialBalance = getAmountFromWei(
@@ -163,36 +184,23 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
                 await erc20Mock.balanceOf(owner.address)
               );
 
-              // list new item
-              await mintNewNFT(nftContract, user1);
-              tokenId = 0;
-              paymentToken = erc20Mock.address;
-              price = getAmountInWei(10);
-              await approveERC721(
-                user1,
-                nftContract,
-                tokenId,
-                marketContract.address
-              );
-              await marketContract
-                .connect(user1)
-                .listItem(tokenId, paymentToken, price);
+              fee = Number(await marketContract.fee());
             });
-            let soldEvent;
             it("should allow user to buy item", async () => {
               // mint erc20 tokens to user2
-              await mintERC20(user2, erc20Mock.address, price);
+              await mintERC20(user2, erc20Mock.target, price);
               // approve tokens to market
               await approveERC20(
                 user2,
-                erc20Mock.address,
+                erc20Mock.target,
                 price,
-                marketContract.address
+                marketContract.target
               );
               const listingId = 0;
-              const tx = await marketContract.connect(user2).buyItem(listingId);
-              const txReceipt = await tx.wait(1);
-              soldEvent = txReceipt.events[txReceipt.events.length - 1];
+
+              await expect(marketContract.connect(user2).buyItem(listingId))
+                .to.emit(marketContract, "ItemSold")
+                .withArgs(0, user2.address);
             });
             it("should transfer bought NFT to buyer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
@@ -220,11 +228,6 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
                 getAmountFromWei(price) * ((1000 - fee) / 1000);
               expect(user1FinalBalance).to.be.equal(expectedBalance);
             });
-            it("should emit ItemSold event", async () => {
-              expect(soldEvent.event).to.be.equal("ItemSold");
-              expect(soldEvent.args.listingId).to.be.equal(0);
-              expect(soldEvent.args.buyer).to.be.equal(user2.address);
-            });
             it("should update item status to sold", async () => {
               const listingId = 0;
               const item = (await marketContract.getListings())[listingId];
@@ -232,55 +235,34 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             });
           });
           describe("MATIC payment", () => {
-            let tokenId, paymentToken, price;
             let user1InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, feeRecipientBeforeBalance;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
+              await deployNFTAndMarketContracts();
 
-              fee = await marketContract.fee();
+              // list NFT for sale
+              await listItem(ethers.ZeroAddress);
 
-              // list new item
-              await mintNewNFT(nftContract, user1);
-              tokenId = 0;
-              paymentToken = ethers.constants.AddressZero;
-              price = getAmountInWei(20);
-              await approveERC721(
-                user1,
-                nftContract,
-                tokenId,
-                marketContract.address
+              // user1 matic balance
+              user1InitialBalance = getAmountFromWei(
+                await ethers.provider.getBalance(user1.address)
               );
-              await marketContract
-                .connect(user1)
-                .listItem(tokenId, paymentToken, price);
-
-              user1InitialBalance = getAmountFromWei(await user1.getBalance());
 
               feeRecipientBeforeBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
+
+              fee = Number(await marketContract.fee());
             });
-            let soldEvent;
             it("should allow user to buy item", async () => {
               const listingId = 0;
-              const tx = await marketContract
-                .connect(user2)
-                .buyItem(listingId, { value: price });
-              const txReceipt = await tx.wait(1);
-              soldEvent = txReceipt.events[txReceipt.events.length - 1];
+              await expect(
+                marketContract
+                  .connect(user2)
+                  .buyItem(listingId, { value: price })
+              )
+                .to.emit(marketContract, "ItemSold")
+                .withArgs(0, user2.address);
             });
             it("should transfer bought NFT to buyer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
@@ -289,7 +271,7 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             });
             it("should send fee amount", async () => {
               const feeRecepientAfterBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
               const expectedBalance =
                 feeRecipientBeforeBalance +
@@ -302,7 +284,7 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             it("should send remaining buy price to seller", async () => {
               // user1 matic after balance
               const user1FinalBalance = getAmountFromWei(
-                await user1.getBalance()
+                await ethers.provider.getBalance(user1.address)
               );
               const expectedBalance =
                 user1InitialBalance +
@@ -310,11 +292,6 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
               expect(Math.round(user1FinalBalance)).to.be.equal(
                 Math.round(expectedBalance)
               );
-            });
-            it("should emit ItemSold event", async () => {
-              expect(soldEvent.event).to.be.equal("ItemSold");
-              expect(soldEvent.args.listingId).to.be.equal(0);
-              expect(soldEvent.args.buyer).to.be.equal(user2.address);
             });
             it("should update item status to sold", async () => {
               const listingId = 0;
@@ -325,32 +302,15 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
         });
         describe("Case with Royalty", () => {
           describe("ERC20 token payment", () => {
-            let tokenId, paymentToken, price;
-            let royaltyFeeBPS;
             let user1InitialBalance;
             let user2InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, royaltyFeeBPS, feeRecipientBeforeBalance;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
+              await deployNFTAndMarketContracts();
 
-              // allow erc20Mock token
-              await marketContract
-                .connect(owner)
-                .addSupportedToken(erc20Mock.address);
-
-              fee = await marketContract.fee();
+              // create new offer with royalty NFT
+              royaltyFeeBPS = 100;
+              await listItemWithRoyalty(erc20Mock.target, royaltyFeeBPS);
 
               // user1 erc20 balance
               user1InitialBalance = getAmountFromWei(
@@ -365,41 +325,24 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
                 await erc20Mock.balanceOf(owner.address)
               );
 
-              // list new item
-              royaltyFeeBPS = 100;
-              await mintNewNFTWithRoyalty(nftContract, user1, royaltyFeeBPS);
-              tokenId = 0;
-              // transfer NFT to user2 to test if royalty work
-              await nftContract
-                .connect(user1)
-                .transferFrom(user1.address, user2.address, tokenId);
-              paymentToken = erc20Mock.address;
-              price = getAmountInWei(20);
-              await approveERC721(
-                user2,
-                nftContract,
-                tokenId,
-                marketContract.address
-              );
-              await marketContract
-                .connect(user2)
-                .listItem(tokenId, paymentToken, price);
+              fee = Number(await marketContract.fee());
             });
-            let soldEvent;
             it("should allow user to buy item", async () => {
               // mint erc20 tokens to user2
-              await mintERC20(user3, erc20Mock.address, price);
+              await mintERC20(user3, erc20Mock.target, price);
               // approve tokens to market
               await approveERC20(
                 user3,
-                erc20Mock.address,
+                erc20Mock.target,
                 price,
-                marketContract.address
+                marketContract.target
               );
               const listingId = 0;
-              const tx = await marketContract.connect(user3).buyItem(listingId);
-              const txReceipt = await tx.wait(1);
-              soldEvent = txReceipt.events[txReceipt.events.length - 1];
+              await expect(
+                await marketContract.connect(user3).buyItem(listingId)
+              )
+                .to.emit(marketContract, "ItemSold")
+                .withArgs(0, user3.address);
             });
             it("should transfer bought NFT to buyer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
@@ -442,11 +385,6 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
                 Math.round(expectedBalance)
               );
             });
-            it("should emit ItemSold event", async () => {
-              expect(soldEvent.event).to.be.equal("ItemSold");
-              expect(soldEvent.args.listingId).to.be.equal(0);
-              expect(soldEvent.args.buyer).to.be.equal(user3.address);
-            });
             it("should update item status to sold", async () => {
               const listingId = 0;
               const item = (await marketContract.getListings())[listingId];
@@ -454,66 +392,41 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             });
           });
           describe("MATIC payment", () => {
-            let tokenId, paymentToken, price;
-            let royaltyFeeBPS;
             let user1InitialBalance;
             let user2InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, royaltyFeeBPS, feeRecipientBeforeBalance;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
+              await deployNFTAndMarketContracts();
 
-              fee = await marketContract.fee();
-
-              // list new item
-              royaltyFeeBPS = 200;
-              await mintNewNFTWithRoyalty(nftContract, user1, royaltyFeeBPS);
-              tokenId = 0;
-              // transfer NFT to user2 to test if royalty work
-              await nftContract
-                .connect(user1)
-                .transferFrom(user1.address, user2.address, tokenId);
-              paymentToken = ethers.constants.AddressZero;
-              price = getAmountInWei(200);
-              await approveERC721(
-                user2,
-                nftContract,
-                tokenId,
-                marketContract.address
-              );
-              await marketContract
-                .connect(user2)
-                .listItem(tokenId, paymentToken, price);
+              // create new offer with royalty NFT
+              royaltyFeeBPS = 100;
+              await listItemWithRoyalty(ethers.ZeroAddress, royaltyFeeBPS);
 
               // user1 matic balance
-              user1InitialBalance = getAmountFromWei(await user1.getBalance());
+              user1InitialBalance = getAmountFromWei(
+                await ethers.provider.getBalance(user1.address)
+              );
 
               // user2 matic balance
-              user2InitialBalance = getAmountFromWei(await user2.getBalance());
+              user2InitialBalance = getAmountFromWei(
+                await ethers.provider.getBalance(user2.address)
+              );
 
               feeRecipientBeforeBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
+
+              fee = Number(await marketContract.fee());
             });
-            let soldEvent;
             it("should allow user to buy item", async () => {
               const listingId = 0;
-              const tx = await marketContract
-                .connect(user3)
-                .buyItem(listingId, { value: price });
-              const txReceipt = await tx.wait(1);
-              soldEvent = txReceipt.events[txReceipt.events.length - 1];
+              await expect(
+                marketContract
+                  .connect(user3)
+                  .buyItem(listingId, { value: price })
+              )
+                .to.emit(marketContract, "ItemSold")
+                .withArgs(0, user3.address);
             });
             it("should transfer bought NFT to buyer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
@@ -522,17 +435,19 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             });
             it("should send fee amount", async () => {
               const feeRecepientAfterBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
               const expectedBalance =
                 feeRecipientBeforeBalance +
                 getAmountFromWei(price) * (fee / 1000);
-              expect(feeRecepientAfterBalance).to.be.equal(expectedBalance);
+              expect(
+                parseFloat(feeRecepientAfterBalance).toFixed(5)
+              ).to.be.equal(parseFloat(expectedBalance).toFixed(5));
             });
             it("should send royalty to original creator", async () => {
               // user1 matic after balance
               const user1FinalBalance = getAmountFromWei(
-                await user1.getBalance()
+                await ethers.provider.getBalance(user1.address)
               );
               const expectedBalance =
                 user1InitialBalance +
@@ -544,7 +459,7 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             it("should send remaining buy price to seller", async () => {
               // user2 matic after balance
               const user2FinalBalance = getAmountFromWei(
-                await user2.getBalance()
+                await ethers.provider.getBalance(user2.address)
               );
 
               const salePrice = getAmountFromWei(price);
@@ -557,11 +472,6 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
                 Math.round(expectedBalance)
               );
             });
-            it("should emit ItemSold event", async () => {
-              expect(soldEvent.event).to.be.equal("ItemSold");
-              expect(soldEvent.args.listingId).to.be.equal(0);
-              expect(soldEvent.args.buyer).to.be.equal(user3.address);
-            });
             it("should update item status to sold", async () => {
               const listingId = 0;
               const item = (await marketContract.getListings())[listingId];
@@ -572,37 +482,11 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
       });
       describe("cancelListing()", () => {
         before(async () => {
-          // Deploy NFT Collection contract
-          nftContract = await deployNFTContract(
-            owner,
-            artistsNftContract.address
-          );
-          // Deploy AART market contract
-          const MarketContract = await ethers.getContractFactory("AARTMarket");
-          marketContract = await MarketContract.deploy(nftContract.address);
-          await marketContract.deployed();
+          await deployNFTAndMarketContracts();
 
-          // allow erc20Mock token
-          await marketContract
-            .connect(owner)
-            .addSupportedToken(erc20Mock.address);
-
-          // list new item
-          await mintNewNFT(nftContract, user1);
-          tokenId = 0;
-          paymentToken = erc20Mock.address;
-          price = getAmountInWei(10);
-          await approveERC721(
-            user1,
-            nftContract,
-            tokenId,
-            marketContract.address
-          );
-          await marketContract
-            .connect(user1)
-            .listItem(tokenId, paymentToken, price);
+          // list NFT for sale
+          await listItem(erc20Mock.target);
         });
-        let tokenId, paymentToken, price;
         let listingId = 0;
         it("should not allow non seller to cancel listing", async () => {
           await expect(
@@ -612,17 +496,10 @@ const ListingStatus = { Active: 0, Sold: 1, Canceled: 2 };
             "AARTMarket_OnlySeller"
           );
         });
-        let cancelEvent;
         it("should allow seller to cancel listing", async () => {
-          const tx = await marketContract
-            .connect(user1)
-            .cancelListing(listingId);
-          const txReceipt = await tx.wait(1);
-          cancelEvent = txReceipt.events[0];
-        });
-        it("should emit ItemCanceled event", async () => {
-          expect(cancelEvent.event).to.be.equal("ItemCanceled");
-          expect(cancelEvent.args.listingId).to.be.equal(listingId);
+          await expect(marketContract.connect(user1).cancelListing(listingId))
+            .to.emit(marketContract, "ItemCanceled")
+            .withArgs(listingId);
         });
         it("should update item listing status to Canceled", async () => {
           const item = (await marketContract.getListings())[listingId];

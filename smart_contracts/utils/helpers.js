@@ -3,10 +3,11 @@ const { ethers } = require("hardhat");
 const developmentChains = ["hardhat", "localhost", "ganache"];
 
 function getAmountInWei(amount) {
-  return ethers.utils.parseEther(amount.toString(), "ether");
+  return ethers.parseEther(amount.toString(), "ether");
 }
+
 function getAmountFromWei(amount) {
-  return Number(ethers.utils.formatUnits(amount.toString(), "ether"));
+  return Number(ethers.formatUnits(amount.toString(), "ether"));
 }
 
 async function resetTime() {
@@ -25,17 +26,14 @@ async function moveTimeTo(target) {
   await ethers.provider.send("evm_mine");
 }
 
-async function deployERC20Mock() {
-  const Mock = await hre.ethers.getContractFactory("ERC20Mock");
-  const mockContract = await Mock.deploy(18);
-  await mockContract.deployed();
-
-  return mockContract;
+async function deployContract(name, args) {
+  const contract = await ethers.deployContract(name, args);
+  await contract.waitForDeployment();
+  return contract;
 }
 
 async function mintERC20(account, erc20Address, amount) {
   const erc20 = await ethers.getContractAt("IERC20Mock", erc20Address);
-
   const mint_tx = await erc20
     .connect(account)
     .mint(account.address, getAmountInWei(amount));
@@ -47,26 +45,6 @@ async function approveERC20(account, erc20Address, approvedAmount, spender) {
 
   const tx = await erc20.connect(account).approve(spender, approvedAmount);
   await tx.wait(1);
-}
-
-async function deployArtistsContract() {
-  const Contract = await ethers.getContractFactory("AARTArtists");
-  let contract = await Contract.deploy();
-  await contract.deployed();
-  return contract;
-}
-
-async function deployNFTContract(deployer) {
-  const mintFee = getAmountInWei(10);
-  // Deploy NFT Collection contract
-  const NFTContract = await ethers.getContractFactory("AARTCollection");
-  const nftContract = await NFTContract.deploy(mintFee);
-  await nftContract.deployed();
-
-  // unpause contract
-  await nftContract.connect(deployer).pause(2);
-
-  return nftContract;
 }
 
 async function mintNewNFT(nftContract, account) {
@@ -96,13 +74,11 @@ module.exports = {
   developmentChains,
   getAmountFromWei,
   getAmountInWei,
-  deployERC20Mock,
+  deployContract,
   mintERC20,
   approveERC20,
   resetTime,
   moveTimeTo,
-  deployArtistsContract,
-  deployNFTContract,
   mintNewNFT,
   mintNewNFTWithRoyalty,
   approveERC721,

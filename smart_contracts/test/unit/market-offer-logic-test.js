@@ -1,21 +1,21 @@
 const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
 const {
-  deployArtistsContract,
-  deployNFTContract,
+  deployContract,
   mintNewNFT,
   mintNewNFTWithRoyalty,
   approveERC721,
   getAmountInWei,
   getAmountFromWei,
   developmentChains,
-  deployERC20Mock,
   mintERC20,
   approveERC20,
 } = require("../../utils/helpers");
 
 const OfferStatus = { Active: 0, Ended: 1 };
 const DAY = 86400;
+
+const mintFee = getAmountInWei(10);
 
 !developmentChains.includes(network.name)
   ? describe.skip
@@ -26,12 +26,102 @@ const DAY = 86400;
       let marketContract;
       let erc20Mock;
 
+      let tokenId, paymentToken, price, expireTime;
+
+      async function deployNFTAndMarketContracts() {
+        // Deploy NFT Collection contract
+        nftContract = await deployContract("AARTCollection", [
+          artistsNftContract.target,
+          mintFee,
+        ]);
+
+        // unpause contract
+        await nftContract.pause(2);
+
+        // Deploy AART market contract
+        marketContract = await deployContract("AARTMarket", [
+          nftContract.target,
+        ]);
+      }
+
+      async function createOffer(token) {
+        // allow to supported tokens
+        if (token !== ethers.ZeroAddress) {
+          await marketContract.connect(owner).addSupportedToken(token);
+        }
+
+        // mint new item
+        await mintNewNFT(nftContract, user1);
+
+        // create new offer
+        tokenId = 0;
+        price = getAmountInWei(30);
+
+        // 20 days into the future
+        expireTime = Math.floor(
+          new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
+        );
+
+        if (token !== ethers.ZeroAddress) {
+          await mintERC20(user2, token, price);
+          await approveERC20(user2, token, price, marketContract.target);
+          await marketContract
+            .connect(user2)
+            .makeOffer(tokenId, token, price, expireTime);
+        } else {
+          await marketContract
+            .connect(user2)
+            .makeOffer(tokenId, token, price, expireTime, {
+              value: price,
+            });
+        }
+      }
+
+      async function createOfferWithRoyalty(token, royaltyFeeBPS) {
+        // allow to supported tokens
+        if (token !== ethers.ZeroAddress) {
+          await marketContract.connect(owner).addSupportedToken(token);
+        }
+
+        // mint new NFT with royalty
+        royaltyFeeBPS = 100;
+        await mintNewNFTWithRoyalty(nftContract, user1, royaltyFeeBPS);
+
+        tokenId = 0;
+        // transfer NFT to user2 to test if royalty work
+        await nftContract
+          .connect(user1)
+          .transferFrom(user1.address, user2.address, tokenId);
+
+        // create new offer
+        tokenId = 0;
+        price = getAmountInWei(30);
+        // 20 days into the future
+        expireTime = Math.floor(
+          new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
+        );
+
+        if (token !== ethers.ZeroAddress) {
+          await mintERC20(user3, token, price);
+          await approveERC20(user3, token, price, marketContract.target);
+          await marketContract
+            .connect(user3)
+            .makeOffer(tokenId, token, price, expireTime);
+        } else {
+          await marketContract
+            .connect(user3)
+            .makeOffer(tokenId, token, price, expireTime, {
+              value: price,
+            });
+        }
+      }
+
       before(async () => {
         [owner, user1, user2, user3, randomUser] = await ethers.getSigners();
 
-        erc20Mock = await deployERC20Mock();
+        erc20Mock = await deployContract("ERC20Mock", [18]);
 
-        artistsNftContract = await deployArtistsContract();
+        artistsNftContract = await deployContract("AARTArtists", []);
 
         // register user1, user2, user3, randomUser
         const TEST_URI = "ipfs://test-nft-profile-uri";
@@ -45,22 +135,11 @@ const DAY = 86400;
       describe("makeOffer()", () => {
         describe("ERC20 token payment offer", () => {
           before(async () => {
-            // Deploy NFT Collection contract
-            nftContract = await deployNFTContract(
-              owner,
-              artistsNftContract.address
-            );
-            // Deploy AART market contract
-            const MarketContract = await ethers.getContractFactory(
-              "AARTMarket"
-            );
-            marketContract = await MarketContract.deploy(nftContract.address);
-            await marketContract.deployed();
+            await deployNFTAndMarketContracts();
           });
-          let tokenId, paymentToken, price, expireTime;
           it("should not allow user to make offre with unsupported payment token", async () => {
             tokenId = 0;
-            paymentToken = erc20Mock.address;
+            paymentToken = erc20Mock.target;
             price = getAmountInWei(30);
 
             // 20 days into the future
@@ -81,7 +160,7 @@ const DAY = 86400;
             // allow erc20Mock token
             await marketContract
               .connect(owner)
-              .addSupportedToken(erc20Mock.address);
+              .addSupportedToken(erc20Mock.target);
 
             await expect(
               marketContract
@@ -89,7 +168,6 @@ const DAY = 86400;
                 .makeOffer(tokenId, paymentToken, price, expireTime)
             ).to.be.revertedWith("ERC721: invalid token ID");
           });
-          let newOfferEvent;
           it("should revert when expiration time is in the past", async () => {
             // mint new NFT to user1
             await mintNewNFT(nftContract, user1);
@@ -120,25 +198,18 @@ const DAY = 86400;
           it("should allow user to make offer on existing AART token", async () => {
             await approveERC20(
               randomUser,
-              erc20Mock.address,
+              erc20Mock.target,
               price,
-              marketContract.address
+              marketContract.target
             );
 
-            const tx = await marketContract
-              .connect(randomUser)
-              .makeOffer(tokenId, paymentToken, price, expireTime);
-            const txReceipt = await tx.wait(1);
-            newOfferEvent = txReceipt.events[0];
-            expect(
-              (await marketContract.getTokenBuyOffers(tokenId)).length
-            ).to.be.equal(1);
-          });
-          it("should emit NewOffer event", async () => {
-            expect(newOfferEvent.event).to.be.equal("NewOffer");
-            expect(newOfferEvent.args.offerId).to.be.equal(0);
-            expect(newOfferEvent.args.tokenId).to.be.equal(tokenId);
-            expect(newOfferEvent.args.offerer).to.be.equal(randomUser.address);
+            await expect(
+              marketContract
+                .connect(randomUser)
+                .makeOffer(tokenId, paymentToken, price, expireTime)
+            )
+              .to.emit(marketContract, "NewOffer")
+              .withArgs(0, tokenId, randomUser.address);
           });
           it("should store correct offer info", async () => {
             const offerId = 0;
@@ -154,23 +225,11 @@ const DAY = 86400;
         });
         describe("MATIC payment offer", () => {
           before(async () => {
-            // Deploy NFT Collection contract
-            nftContract = await deployNFTContract(
-              owner,
-              artistsNftContract.address
-            );
-            // Deploy AART market contract
-            const MarketContract = await ethers.getContractFactory(
-              "AARTMarket"
-            );
-            marketContract = await MarketContract.deploy(nftContract.address);
-            await marketContract.deployed();
+            await deployNFTAndMarketContracts();
           });
-          let tokenId, paymentToken, price, expireTime;
-          let newOfferEvent;
           it("should not allow user to make offer on non AART token", async () => {
             tokenId = 0;
-            paymentToken = ethers.constants.AddressZero;
+            paymentToken = ethers.ZeroAddress;
             price = getAmountInWei(30);
             // 20 days into the future
             expireTime = Math.floor(
@@ -218,18 +277,21 @@ const DAY = 86400;
           });
           it("should allow user to make offer on existing AART token", async () => {
             const marketBeforeBalance = getAmountFromWei(
-              await ethers.provider.getBalance(marketContract.address)
+              await ethers.provider.getBalance(marketContract.target)
             );
-            const tx = await marketContract
-              .connect(randomUser)
-              .makeOffer(tokenId, paymentToken, price, expireTime, {
-                value: price,
-              });
-            const txReceipt = await tx.wait(1);
-            newOfferEvent = txReceipt.events[0];
+
+            await expect(
+              marketContract
+                .connect(randomUser)
+                .makeOffer(tokenId, paymentToken, price, expireTime, {
+                  value: price,
+                })
+            )
+              .to.emit(marketContract, "NewOffer")
+              .withArgs(0, tokenId, randomUser.address);
 
             const marketAfterBalance = getAmountFromWei(
-              await ethers.provider.getBalance(marketContract.address)
+              await ethers.provider.getBalance(marketContract.target)
             );
 
             expect(
@@ -239,12 +301,6 @@ const DAY = 86400;
             expect(marketAfterBalance).to.be.equal(
               marketBeforeBalance + getAmountFromWei(price)
             );
-          });
-          it("should emit NewOffer event", async () => {
-            expect(newOfferEvent.event).to.be.equal("NewOffer");
-            expect(newOfferEvent.args.offerId).to.be.equal(0);
-            expect(newOfferEvent.args.tokenId).to.be.equal(tokenId);
-            expect(newOfferEvent.args.offerer).to.be.equal(randomUser.address);
           });
           it("should store correct offer info", async () => {
             const offerId = 0;
@@ -264,30 +320,13 @@ const DAY = 86400;
         describe("Case token without Royalty", () => {
           describe("ERC20 token payment offer", () => {
             let offerId = 0;
-            let tokenId, paymentToken, price, expireTime;
             let user1InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, feeRecipientBeforeBalance;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
+              await deployNFTAndMarketContracts();
 
-              // allow erc20Mock token
-              await marketContract
-                .connect(owner)
-                .addSupportedToken(erc20Mock.address);
-
-              fee = await marketContract.fee();
+              // create new offer
+              await createOffer(erc20Mock.target);
 
               // user1 erc20 balance
               user1InitialBalance = getAmountFromWei(
@@ -298,31 +337,7 @@ const DAY = 86400;
                 await erc20Mock.balanceOf(owner.address)
               );
 
-              // mint new item
-              await mintNewNFT(nftContract, user1);
-
-              // create new offer
-              tokenId = 0;
-              paymentToken = erc20Mock.address;
-              price = getAmountInWei(30);
-
-              // 20 days into the future
-              expireTime = Math.floor(
-                new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
-              );
-
-              await mintERC20(randomUser, erc20Mock.address, price);
-
-              await approveERC20(
-                randomUser,
-                erc20Mock.address,
-                price,
-                marketContract.address
-              );
-
-              await marketContract
-                .connect(randomUser)
-                .makeOffer(tokenId, paymentToken, price, expireTime);
+              fee = Number(await marketContract.fee());
             });
             it("should revert if non token owner tries to accept offer", async () => {
               await expect(
@@ -332,23 +347,22 @@ const DAY = 86400;
                 "AARTMarket_OnlyTokenOwner"
               );
             });
-            let acceptedEvent;
             it("should allow token owner to accept offer", async () => {
               await approveERC721(
                 user1,
                 nftContract,
                 tokenId,
-                marketContract.address
+                marketContract.target
               );
-              const tx = await marketContract
-                .connect(user1)
-                .acceptOffer(tokenId, offerId);
-              const txReceipt = await tx.wait(1);
-              acceptedEvent = txReceipt.events[txReceipt.events.length - 1];
+              await expect(
+                marketContract.connect(user1).acceptOffer(tokenId, offerId)
+              )
+                .to.emit(marketContract, "OfferAccepted")
+                .withArgs(offerId, tokenId, user1.address);
             });
             it("should transfer bought NFT to offerer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
-                randomUser.address
+                user2.address
               );
             });
             it("should send fee amount", async () => {
@@ -370,12 +384,6 @@ const DAY = 86400;
                 getAmountFromWei(price) * ((1000 - fee) / 1000);
               expect(user1FinalBalance).to.be.equal(expectedBalance);
             });
-            it("should emit OfferAccepted event", async () => {
-              expect(acceptedEvent.event).to.be.equal("OfferAccepted");
-              expect(acceptedEvent.args.offerId).to.be.equal(offerId);
-              expect(acceptedEvent.args.tokenId).to.be.equal(tokenId);
-              expect(acceptedEvent.args.owner).to.be.equal(user1.address);
-            });
             it("should update item status to ended", async () => {
               const offer = (await marketContract.getTokenBuyOffers(tokenId))[
                 offerId
@@ -385,50 +393,24 @@ const DAY = 86400;
           });
           describe("MATIC payment offer", () => {
             let offerId = 0;
-            let tokenId, paymentToken, price, expireTime;
             let user1InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, feeRecipientBeforeBalance;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
-
-              fee = await marketContract.fee();
-
-              // mint new item
-              await mintNewNFT(nftContract, user1);
+              await deployNFTAndMarketContracts();
 
               // create new offer
-              tokenId = 0;
-              paymentToken = ethers.constants.AddressZero;
-              price = getAmountInWei(30);
-              // 20 days into the future
-              expireTime = Math.floor(
-                new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
-              );
-
-              await marketContract
-                .connect(randomUser)
-                .makeOffer(tokenId, paymentToken, price, expireTime, {
-                  value: price,
-                });
+              await createOffer(ethers.ZeroAddress);
 
               // user1 matic balance
-              user1InitialBalance = getAmountFromWei(await user1.getBalance());
+              user1InitialBalance = getAmountFromWei(
+                await ethers.provider.getBalance(user1.address)
+              );
 
               feeRecipientBeforeBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
+
+              fee = Number(await marketContract.fee());
             });
             it("should revert if non token owner tries to accept offer", async () => {
               await expect(
@@ -438,28 +420,27 @@ const DAY = 86400;
                 "AARTMarket_OnlyTokenOwner"
               );
             });
-            let acceptedEvent;
             it("should allow token owner to accept offer", async () => {
               await approveERC721(
                 user1,
                 nftContract,
                 tokenId,
-                marketContract.address
+                marketContract.target
               );
-              const tx = await marketContract
-                .connect(user1)
-                .acceptOffer(tokenId, offerId);
-              const txReceipt = await tx.wait(1);
-              acceptedEvent = txReceipt.events[txReceipt.events.length - 1];
+              await expect(
+                marketContract.connect(user1).acceptOffer(tokenId, offerId)
+              )
+                .to.emit(marketContract, "OfferAccepted")
+                .withArgs(offerId, tokenId, user1.address);
             });
             it("should transfer bought NFT to offerer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
-                randomUser.address
+                user2.address
               );
             });
             it("should send fee amount", async () => {
               const feeRecepientAfterBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
               const expectedBalance =
                 feeRecipientBeforeBalance +
@@ -471,7 +452,7 @@ const DAY = 86400;
             it("should send buy price to seller", async () => {
               // user1 erc20 after balance
               const user1FinalBalance = getAmountFromWei(
-                await user1.getBalance()
+                await ethers.provider.getBalance(user1.address)
               );
               const expectedBalance =
                 user1InitialBalance +
@@ -479,12 +460,6 @@ const DAY = 86400;
               expect(parseFloat(user1FinalBalance).toFixed(3)).to.be.equal(
                 parseFloat(expectedBalance).toFixed(3)
               );
-            });
-            it("should emit OfferAccepted event", async () => {
-              expect(acceptedEvent.event).to.be.equal("OfferAccepted");
-              expect(acceptedEvent.args.offerId).to.be.equal(offerId);
-              expect(acceptedEvent.args.tokenId).to.be.equal(tokenId);
-              expect(acceptedEvent.args.owner).to.be.equal(user1.address);
             });
             it("should update item status to ended", async () => {
               const offer = (await marketContract.getTokenBuyOffers(tokenId))[
@@ -497,32 +472,15 @@ const DAY = 86400;
         describe("Case token with Royalty", () => {
           describe("ERC20 token payment offer", () => {
             let offerId = 0;
-            let tokenId, paymentToken, price, expireTime;
-            let royaltyFeeBPS;
             let user1InitialBalance;
             let user2InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, feeRecipientBeforeBalance, royaltyFeeBPS;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
+              await deployNFTAndMarketContracts();
 
-              // allow erc20Mock token
-              await marketContract
-                .connect(owner)
-                .addSupportedToken(erc20Mock.address);
-
-              fee = await marketContract.fee();
+              // create new offer with royalty NFT
+              royaltyFeeBPS = 100;
+              await createOfferWithRoyalty(erc20Mock.target, royaltyFeeBPS);
 
               // user1 erc20 balance
               user1InitialBalance = getAmountFromWei(
@@ -537,37 +495,7 @@ const DAY = 86400;
                 await erc20Mock.balanceOf(owner.address)
               );
 
-              // mint new item
-              royaltyFeeBPS = 100;
-              await mintNewNFTWithRoyalty(nftContract, user1, royaltyFeeBPS);
-
-              tokenId = 0;
-              // transfer NFT to user2 to test if royalty work
-              await nftContract
-                .connect(user1)
-                .transferFrom(user1.address, user2.address, tokenId);
-
-              // create new offer
-              tokenId = 0;
-              paymentToken = erc20Mock.address;
-              price = getAmountInWei(30);
-              // 20 days into the future
-              expireTime = Math.floor(
-                new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
-              );
-
-              await mintERC20(user3, erc20Mock.address, price);
-
-              await approveERC20(
-                user3,
-                erc20Mock.address,
-                price,
-                marketContract.address
-              );
-
-              await marketContract
-                .connect(user3)
-                .makeOffer(tokenId, paymentToken, price, expireTime);
+              fee = Number(await marketContract.fee());
             });
             it("should revert if non token owner tries to accept offer", async () => {
               await expect(
@@ -577,19 +505,18 @@ const DAY = 86400;
                 "AARTMarket_OnlyTokenOwner"
               );
             });
-            let acceptedEvent;
             it("should allow token owner to accept offer", async () => {
               await approveERC721(
                 user2,
                 nftContract,
                 tokenId,
-                marketContract.address
+                marketContract.target
               );
-              const tx = await marketContract
-                .connect(user2)
-                .acceptOffer(tokenId, offerId);
-              const txReceipt = await tx.wait(1);
-              acceptedEvent = txReceipt.events[txReceipt.events.length - 1];
+              await expect(
+                marketContract.connect(user2).acceptOffer(tokenId, offerId)
+              )
+                .to.emit(marketContract, "OfferAccepted")
+                .withArgs(offerId, tokenId, user2.address);
             });
             it("should transfer bought NFT to offerer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
@@ -629,12 +556,6 @@ const DAY = 86400;
               const expectedBalance = user2InitialBalance + remainAmount;
               expect(user2FinalBalance).to.be.equal(expectedBalance);
             });
-            it("should emit OfferAccepted event", async () => {
-              expect(acceptedEvent.event).to.be.equal("OfferAccepted");
-              expect(acceptedEvent.args.offerId).to.be.equal(offerId);
-              expect(acceptedEvent.args.tokenId).to.be.equal(tokenId);
-              expect(acceptedEvent.args.owner).to.be.equal(user2.address);
-            });
             it("should update item status to ended", async () => {
               const offer = (await marketContract.getTokenBuyOffers(tokenId))[
                 offerId
@@ -644,60 +565,31 @@ const DAY = 86400;
           });
           describe("MATIC payment offer", () => {
             let offerId = 0;
-            let tokenId, paymentToken, price, expireTime;
-            let royaltyFeeBPS;
             let user1InitialBalance;
             let user2InitialBalance;
-
-            let fee;
-            let feeRecipientBeforeBalance;
+            let fee, feeRecipientBeforeBalance, royaltyFeeBPS;
             before(async () => {
-              // Deploy NFT Collection contract
-              nftContract = await deployNFTContract(
-                owner,
-                artistsNftContract.address
-              );
-              // Deploy AART market contract
-              const MarketContract = await ethers.getContractFactory(
-                "AARTMarket"
-              );
-              marketContract = await MarketContract.deploy(nftContract.address);
-              await marketContract.deployed();
+              await deployNFTAndMarketContracts();
 
-              fee = await marketContract.fee();
-
-              // mint new item
-              royaltyFeeBPS = 200;
-              await mintNewNFTWithRoyalty(nftContract, user1, royaltyFeeBPS);
-
-              tokenId = 0;
-              // transfer NFT to user2 to test if royalty work
-              await nftContract
-                .connect(user1)
-                .transferFrom(user1.address, user2.address, tokenId);
-
-              paymentToken = ethers.constants.AddressZero;
-              price = getAmountInWei(30);
-              // 20 days into the future
-              expireTime = Math.floor(
-                new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
-              );
-
-              await marketContract
-                .connect(user3)
-                .makeOffer(tokenId, paymentToken, price, expireTime, {
-                  value: price,
-                });
+              // create new offer with royalty NFT
+              royaltyFeeBPS = 100;
+              await createOfferWithRoyalty(ethers.ZeroAddress, royaltyFeeBPS);
 
               // user1 matic balance
-              user1InitialBalance = getAmountFromWei(await user1.getBalance());
+              user1InitialBalance = getAmountFromWei(
+                await ethers.provider.getBalance(user1.address)
+              );
 
               // user2 matic balance
-              user2InitialBalance = getAmountFromWei(await user2.getBalance());
+              user2InitialBalance = getAmountFromWei(
+                await ethers.provider.getBalance(user2.address)
+              );
 
               feeRecipientBeforeBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
+
+              fee = Number(await marketContract.fee());
             });
             it("should revert if non token owner tries to accept offer", async () => {
               await expect(
@@ -707,19 +599,18 @@ const DAY = 86400;
                 "AARTMarket_OnlyTokenOwner"
               );
             });
-            let acceptedEvent;
             it("should allow token owner to accept offer", async () => {
               await approveERC721(
                 user2,
                 nftContract,
                 tokenId,
-                marketContract.address
+                marketContract.target
               );
-              const tx = await marketContract
-                .connect(user2)
-                .acceptOffer(tokenId, offerId);
-              const txReceipt = await tx.wait(1);
-              acceptedEvent = txReceipt.events[txReceipt.events.length - 1];
+              await expect(
+                marketContract.connect(user2).acceptOffer(tokenId, offerId)
+              )
+                .to.emit(marketContract, "OfferAccepted")
+                .withArgs(offerId, tokenId, user2.address);
             });
             it("should transfer bought NFT to offerer", async () => {
               expect(await nftContract.ownerOf(tokenId)).to.be.equal(
@@ -728,7 +619,7 @@ const DAY = 86400;
             });
             it("should send fee amount", async () => {
               const feeRecepientAfterBalance = getAmountFromWei(
-                await owner.getBalance()
+                await ethers.provider.getBalance(owner.address)
               );
               const expectedBalance =
                 feeRecipientBeforeBalance +
@@ -740,7 +631,7 @@ const DAY = 86400;
             it("should send royalty to original creator", async () => {
               // user1 matic after balance
               const user1FinalBalance = getAmountFromWei(
-                await user1.getBalance()
+                await ethers.provider.getBalance(user1.address)
               );
               const expectedBalance =
                 user1InitialBalance +
@@ -752,7 +643,7 @@ const DAY = 86400;
             it("should send remaining buy price to seller", async () => {
               // user2 matic after balance
               const user2FinalBalance = getAmountFromWei(
-                await user2.getBalance()
+                await ethers.provider.getBalance(user2.address)
               );
 
               const salePrice = getAmountFromWei(price);
@@ -764,12 +655,6 @@ const DAY = 86400;
               expect(Math.round(user2FinalBalance)).to.be.equal(
                 Math.round(expectedBalance)
               );
-            });
-            it("should emit OfferAccepted event", async () => {
-              expect(acceptedEvent.event).to.be.equal("OfferAccepted");
-              expect(acceptedEvent.args.offerId).to.be.equal(offerId);
-              expect(acceptedEvent.args.tokenId).to.be.equal(tokenId);
-              expect(acceptedEvent.args.owner).to.be.equal(user2.address);
             });
             it("should update item status to ended", async () => {
               const offer = (await marketContract.getTokenBuyOffers(tokenId))[
@@ -784,49 +669,11 @@ const DAY = 86400;
       describe("cancelOffer()", () => {
         describe("ERC20 token payment offer", () => {
           let offerId = 0;
-          let tokenId, paymentToken, price, expireTime;
           before(async () => {
-            // Deploy NFT Collection contract
-            nftContract = await deployNFTContract(
-              owner,
-              artistsNftContract.address
-            );
-            // Deploy AART market contract
-            const MarketContract = await ethers.getContractFactory(
-              "AARTMarket"
-            );
-            marketContract = await MarketContract.deploy(nftContract.address);
-            await marketContract.deployed();
-
-            // allow erc20Mock token
-            await marketContract
-              .connect(owner)
-              .addSupportedToken(erc20Mock.address);
-
-            // mint new item
-            await mintNewNFT(nftContract, user1);
+            await deployNFTAndMarketContracts();
 
             // create new offer
-            tokenId = 0;
-            paymentToken = erc20Mock.address;
-            price = getAmountInWei(30);
-            // 20 days into the future
-            expireTime = Math.floor(
-              new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
-            );
-
-            await mintERC20(user2, erc20Mock.address, price);
-
-            await approveERC20(
-              user2,
-              erc20Mock.address,
-              price,
-              marketContract.address
-            );
-
-            await marketContract
-              .connect(user2)
-              .makeOffer(tokenId, paymentToken, price, expireTime);
+            await createOffer(erc20Mock.target);
           });
           it("should not allow non offerer to cancel offer", async () => {
             await expect(
@@ -836,24 +683,13 @@ const DAY = 86400;
               "AARTMarket_OnlyOfferer"
             );
           });
-          let cancelEvent;
           it("should allow offerer to cancel his offer", async () => {
-            approveERC20(
-              user2,
-              erc20Mock.address,
-              price,
-              marketContract.address
-            );
-            const tx = await marketContract
-              .connect(user2)
-              .cancelOffer(tokenId, offerId);
-            const txReceipt = await tx.wait(1);
-            cancelEvent = txReceipt.events[0];
-          });
-          it("should emit OfferCanceled event", async () => {
-            expect(cancelEvent.event).to.be.equal("OfferCanceled");
-            expect(cancelEvent.args.offerId).to.be.equal(offerId);
-            expect(cancelEvent.args.tokenId).to.be.equal(tokenId);
+            approveERC20(user2, erc20Mock.target, price, marketContract.target);
+            await expect(
+              marketContract.connect(user2).cancelOffer(tokenId, offerId)
+            )
+              .to.emit(marketContract, "OfferCanceled")
+              .withArgs(offerId, tokenId);
           });
           it("should update offer status to ended", async () => {
             const offer = (await marketContract.getTokenBuyOffers(tokenId))[
@@ -872,37 +708,11 @@ const DAY = 86400;
         });
         describe("Matic payment offer", () => {
           let offerId = 0;
-          let tokenId, paymentToken, price, expireTime;
           before(async () => {
-            // Deploy NFT Collection contract
-            nftContract = await deployNFTContract(
-              owner,
-              artistsNftContract.address
-            );
-            // Deploy AART market contract
-            const MarketContract = await ethers.getContractFactory(
-              "AARTMarket"
-            );
-            marketContract = await MarketContract.deploy(nftContract.address);
-            await marketContract.deployed();
-
-            // mint new item
-            await mintNewNFT(nftContract, user1);
+            await deployNFTAndMarketContracts();
 
             // create new offer
-            tokenId = 0;
-            paymentToken = ethers.constants.AddressZero;
-            price = getAmountInWei(30);
-            // 20 days into the future
-            expireTime = Math.floor(
-              new Date(new Date().getTime() + 20 * DAY * 1000) / 1000
-            );
-
-            await marketContract
-              .connect(user2)
-              .makeOffer(tokenId, paymentToken, price, expireTime, {
-                value: price,
-              });
+            await createOffer(ethers.ZeroAddress);
           });
           it("should not allow non offerer to cancel offer", async () => {
             await expect(
@@ -912,30 +722,25 @@ const DAY = 86400;
               "AARTMarket_OnlyOfferer"
             );
           });
-          let cancelEvent;
           it("should allow offerer to cancel his offer", async () => {
             const user2BeforeBalance = getAmountFromWei(
-              await user2.getBalance()
+              await ethers.provider.getBalance(user2.address)
             );
-            const tx = await marketContract
-              .connect(user2)
-              .cancelOffer(tokenId, offerId);
-            const txReceipt = await tx.wait(1);
-            cancelEvent = txReceipt.events[0];
+
+            await expect(
+              marketContract.connect(user2).cancelOffer(tokenId, offerId)
+            )
+              .to.emit(marketContract, "OfferCanceled")
+              .withArgs(offerId, tokenId);
 
             const user2AfterBalance = getAmountFromWei(
-              await user2.getBalance()
+              await ethers.provider.getBalance(user2.address)
             );
             const expectedBalance =
               user2BeforeBalance + getAmountFromWei(price);
             expect(parseFloat(user2AfterBalance).toFixed(3)).to.be.equal(
               parseFloat(expectedBalance).toFixed(3)
             );
-          });
-          it("should emit OfferCanceled event", async () => {
-            expect(cancelEvent.event).to.be.equal("OfferCanceled");
-            expect(cancelEvent.args.offerId).to.be.equal(offerId);
-            expect(cancelEvent.args.tokenId).to.be.equal(tokenId);
           });
           it("should update offer status to ended", async () => {
             const offer = (await marketContract.getTokenBuyOffers(tokenId))[

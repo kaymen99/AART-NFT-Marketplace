@@ -1,13 +1,6 @@
 const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
-const { developmentChains } = require("../../utils/helpers");
-
-async function deploy() {
-  const Contract = await ethers.getContractFactory("AARTArtists");
-  let contract = await Contract.deploy();
-  await contract.deployed();
-  return contract;
-}
+const { developmentChains, deployContract } = require("../../utils/helpers");
 
 !developmentChains.includes(network.name)
   ? describe.skip
@@ -24,7 +17,7 @@ async function deploy() {
       describe("Correct Deployement", () => {
         before(async () => {
           // Deploy NFT Collection contract
-          contract = await deploy();
+          contract = await deployContract("AARTArtists", []);
         });
         it("NFT contract should have correct owner address", async () => {
           const ownerAddress = await owner.getAddress();
@@ -35,12 +28,10 @@ async function deploy() {
       describe("Core Functions", () => {
         describe("create()", () => {
           before(async () => {
-            contract = await deploy();
+            contract = await deployContract("AARTArtists", []);
           });
           it("should allow user to create artist profile", async () => {
             await contract.connect(user1).create(TEST_URI);
-
-            console.log("created");
 
             const tokenId = 0;
             expect(await contract.balanceOf(user1.address)).to.equal(1);
@@ -75,7 +66,7 @@ async function deploy() {
         describe("update()", () => {
           let tokenId;
           before(async () => {
-            contract = await deploy();
+            contract = await deployContract("AARTArtists", []);
 
             // create a new profile
             await contract.connect(user1).create(TEST_URI);
@@ -106,7 +97,7 @@ async function deploy() {
         describe("burn()", () => {
           let tokenId;
           before(async () => {
-            contract = await deploy();
+            contract = await deployContract("AARTArtists", []);
 
             // create a new profile
             await contract.connect(user1).create(TEST_URI);
@@ -132,7 +123,7 @@ async function deploy() {
         describe("ERC721 Transfer functions", () => {
           let tokenId;
           before(async () => {
-            contract = await deploy();
+            contract = await deployContract("AARTArtists", []);
 
             // create a new profile
             await contract.connect(user1).create(TEST_URI);
@@ -143,7 +134,7 @@ async function deploy() {
               contract
                 .connect(user1)
                 .transferFrom(user1.address, randomUser.address, tokenId)
-            ).to.be.revertedWith("AART profile NFTs are not transferable");
+            ).to.be.revertedWithCustomError(contract, "AART__NotTransferable");
             await expect(
               contract
                 .connect(user1)
@@ -152,7 +143,7 @@ async function deploy() {
                   randomUser.address,
                   tokenId
                 )
-            ).to.be.revertedWith("AART profile NFTs are not transferable");
+            ).to.be.revertedWithCustomError(contract, "AART__NotTransferable");
             await expect(
               contract
                 .connect(user1)
@@ -160,9 +151,9 @@ async function deploy() {
                   user1.address,
                   randomUser.address,
                   tokenId,
-                  ethers.constants.HashZero
+                  ethers.ZeroHash
                 )
-            ).to.be.revertedWith("AART profile NFTs are not transferable");
+            ).to.be.revertedWithCustomError(contract, "AART__NotTransferable");
           });
         });
       });

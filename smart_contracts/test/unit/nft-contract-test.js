@@ -4,18 +4,11 @@ const {
   getAmountInWei,
   getAmountFromWei,
   developmentChains,
-  deployArtistsContract,
+  deployContract,
 } = require("../../utils/helpers");
 
 const mintFee = getAmountInWei(10); // mint fee = 10 MATIC
 const TEST_URI = "ipfs://test-nft-uri";
-
-async function deployNftContract(artistsNftContract) {
-  const Contract = await ethers.getContractFactory("AARTCollection");
-  let contract = await Contract.deploy(artistsNftContract.address, mintFee);
-  await contract.deployed();
-  return contract;
-}
 
 !developmentChains.includes(network.name)
   ? describe.skip
@@ -27,7 +20,7 @@ async function deployNftContract(artistsNftContract) {
       before(async () => {
         [owner, user1, randomUser] = await ethers.getSigners();
 
-        artistsNftContract = await deployArtistsContract();
+        artistsNftContract = await deployContract("AARTArtists", []);
 
         // register user1
         await artistsNftContract.connect(user1).create(TEST_URI);
@@ -36,7 +29,10 @@ async function deployNftContract(artistsNftContract) {
       describe("Correct Deployement", () => {
         before(async () => {
           // Deploy NFT Collection contract
-          nftContract = await deployNftContract(artistsNftContract);
+          nftContract = await deployContract("AARTCollection", [
+            artistsNftContract.target,
+            mintFee,
+          ]);
         });
         it("NFT contract should have correct owner address", async () => {
           const ownerAddress = await owner.getAddress();
@@ -44,7 +40,7 @@ async function deployNftContract(artistsNftContract) {
         });
         it("NFT contract should have correct initial parameters", async () => {
           expect(await nftContract.artistsNftContract()).to.equal(
-            artistsNftContract.address
+            artistsNftContract.target
           );
           expect(await nftContract.mintFee()).to.equal(mintFee);
           expect(await nftContract.paused()).to.equal(1);
@@ -54,7 +50,10 @@ async function deployNftContract(artistsNftContract) {
       describe("Core Functions", () => {
         describe("mintNFT()", () => {
           before(async () => {
-            nftContract = await deployNftContract(artistsNftContract);
+            nftContract = await deployContract("AARTCollection", [
+              artistsNftContract.target,
+              mintFee,
+            ]);
           });
           it("should not allow user to mint NFT when contract is paused", async () => {
             await expect(
@@ -102,7 +101,10 @@ async function deployNftContract(artistsNftContract) {
           const RoyaltyFeeBPS = 100; // 1%
 
           before(async () => {
-            nftContract = await deployNftContract(artistsNftContract);
+            nftContract = await deployContract("AARTCollection", [
+              artistsNftContract.target,
+              mintFee,
+            ]);
 
             RoyaltyReceiver = user1.address;
           });
@@ -182,7 +184,10 @@ async function deployNftContract(artistsNftContract) {
 
       describe("Owner Functions", () => {
         before(async () => {
-          nftContract = await deployNftContract(artistsNftContract);
+          nftContract = await deployContract("AARTCollection", [
+            artistsNftContract.target,
+            mintFee,
+          ]);
         });
 
         it("only owner should be allowed to change NFT contract parametres & withdraw balance", async () => {
@@ -211,11 +216,12 @@ async function deployNftContract(artistsNftContract) {
             .connect(user1)
             .mintNFT(user1.address, TEST_URI, { value: mintFee });
 
-          const ownerInitialBalance = getAmountFromWei(
-            await owner.getBalance()
-          );
+          let ownerBalance = await ethers.provider.getBalance(owner.address);
+          const ownerInitialBalance = getAmountFromWei(ownerBalance);
           await nftContract.connect(owner).withdraw();
-          const ownerFinalBalance = getAmountFromWei(await owner.getBalance());
+
+          ownerBalance = await ethers.provider.getBalance(owner.address);
+          const ownerFinalBalance = getAmountFromWei(ownerBalance);
 
           const expectedBalance =
             ownerInitialBalance + getAmountFromWei(mintFee);
