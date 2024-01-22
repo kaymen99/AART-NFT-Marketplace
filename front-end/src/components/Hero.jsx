@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from 'react-router-dom';
 import "animate.css";
 import "../assets/styles/components/Hero.css";
 import { Container, Row, Col } from "react-bootstrap";
